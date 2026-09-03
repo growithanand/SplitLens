@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:splitlens/app/navigation/app_routes.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -52,32 +53,46 @@ class HomeScreen extends StatelessWidget {
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Icon(
-                            Icons.construction_outlined,
-                            color: colorScheme.primary,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.group_outlined,
+                                color: colorScheme.primary,
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Manual splitting is ready',
+                                      style: textTheme.titleMedium,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Enter a total and add participants to '
+                                      'preview an exact equal split. Receipt '
+                                      'capture and OCR are coming later.',
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Receipt workflow coming next',
-                                  style: textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'SplitLens is in development. Receipt '
-                                  'capture and splitting are not available yet.',
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          const SizedBox(height: 20),
+                          FilledButton.icon(
+                            onPressed: () =>
+                                Navigator.of(context)
+                                    .pushNamed(AppRoutes.expenseSplit),
+                            icon: const Icon(Icons.arrow_forward),
+                            label: const Text('Start a manual split'),
                           ),
                         ],
                       ),

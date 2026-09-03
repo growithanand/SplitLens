@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:splitlens/app/app.dart';
 import 'package:splitlens/app/navigation/app_routes.dart';
 
 void main() {
   testWidgets('configures the SplitLens application shell', (tester) async {
-    await tester.pumpWidget(const SplitLensApp());
+    await tester.pumpWidget(const ProviderScope(child: SplitLensApp()));
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
 
@@ -15,14 +16,24 @@ void main() {
     expect(app.themeMode, ThemeMode.system);
     expect(app.initialRoute, AppRoutes.home);
     expect(app.routes?.containsKey(AppRoutes.home), isTrue);
+    expect(app.routes?.containsKey(AppRoutes.expenseSplit), isTrue);
   });
 
-  testWidgets('displays the temporary home screen', (tester) async {
-    await tester.pumpWidget(const SplitLensApp());
+  testWidgets('opens the manual split workflow from home', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: SplitLensApp()));
 
     expect(find.text('SplitLens'), findsOneWidget);
     expect(find.text('Split receipts with confidence'), findsOneWidget);
-    expect(find.text('Receipt workflow coming next'), findsOneWidget);
+    expect(find.text('Manual splitting is ready'), findsOneWidget);
     expect(find.byIcon(Icons.receipt_long_outlined), findsOneWidget);
+
+    final startButton = find.text('Start a manual split');
+    await tester.ensureVisible(startButton);
+    await tester.pumpAndSettle();
+    await tester.tap(startButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Split an expense'), findsOneWidget);
+    expect(find.text('Enter the receipt total'), findsOneWidget);
   });
 }
