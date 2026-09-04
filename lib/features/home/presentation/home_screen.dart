@@ -60,7 +60,7 @@ class HomeScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Icon(
-                                Icons.group_outlined,
+                                Icons.add_a_photo_outlined,
                                 color: colorScheme.primary,
                               ),
                               const SizedBox(width: 16),
@@ -69,14 +69,14 @@ class HomeScreen extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Manual splitting is ready',
+                                      'Add a receipt image',
                                       style: textTheme.titleMedium,
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'Enter a total and add participants to '
-                                      'preview an exact equal split. Receipt '
-                                      'capture and OCR are coming later.',
+                                      'Take a receipt photo or select a receipt '
+                                      'screenshot from your gallery. The image '
+                                      'stays on this device.',
                                       style: textTheme.bodyMedium?.copyWith(
                                         color: colorScheme.onSurfaceVariant,
                                       ),
@@ -90,8 +90,16 @@ class HomeScreen extends StatelessWidget {
                           FilledButton.icon(
                             onPressed: () =>
                                 Navigator.of(context)
+                                    .pushNamed(AppRoutes.receiptCapture),
+                            icon: const Icon(Icons.add_a_photo_outlined),
+                            label: const Text('Add a receipt'),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                Navigator.of(context)
                                     .pushNamed(AppRoutes.expenseSplit),
-                            icon: const Icon(Icons.arrow_forward),
+                            icon: const Icon(Icons.group_outlined),
                             label: const Text('Start a manual split'),
                           ),
                         ],

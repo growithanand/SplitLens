@@ -3,6 +3,7 @@ import 'package:splitlens/app/navigation/app_routes.dart';
 import 'package:splitlens/app/theme/app_theme.dart';
 import 'package:splitlens/features/expense_split/presentation/expense_split_screen.dart';
 import 'package:splitlens/features/home/presentation/home_screen.dart';
+import 'package:splitlens/features/receipt_capture/presentation/receipt_capture_screen.dart';
 
 class SplitLensApp extends StatelessWidget {
   const SplitLensApp({super.key});
@@ -19,6 +20,7 @@ class SplitLensApp extends StatelessWidget {
       routes: {
         AppRoutes.home: (_) => const HomeScreen(),
         AppRoutes.expenseSplit: (_) => const ExpenseSplitScreen(),
+        AppRoutes.receiptCapture: (_) => const ReceiptCaptureScreen(),
       },
     );
   }
