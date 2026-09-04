@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:splitlens/app/navigation/app_routes.dart';
 import 'package:splitlens/features/receipt_capture/application/receipt_capture_controller.dart';
 import 'package:splitlens/features/receipt_capture/application/receipt_text_recognition_controller.dart';
 import 'package:splitlens/features/receipt_capture/domain/receipt_image.dart';
+import 'package:splitlens/features/receipt_review/presentation/receipt_review_screen.dart';
 
 class ReceiptCaptureScreen extends ConsumerStatefulWidget {
   const ReceiptCaptureScreen({super.key});
@@ -148,8 +150,19 @@ class _ReceiptCaptureScreenState extends ConsumerState<ReceiptCaptureScreen> {
                         isError: true,
                       ),
                     if (recognitionState.status ==
-                        ReceiptTextRecognitionStatus.success)
+                        ReceiptTextRecognitionStatus.success) ...[
                       _RawTextResult(rawText: recognitionState.rawText!),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        key: const ValueKey('review-receipt-button'),
+                        onPressed: () => _openReceiptReview(
+                          imagePath: image.path,
+                          rawOcrText: recognitionState.rawText!,
+                        ),
+                        icon: const Icon(Icons.fact_check_outlined),
+                        label: const Text('Review receipt details'),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -193,6 +206,21 @@ class _ReceiptCaptureScreenState extends ConsumerState<ReceiptCaptureScreen> {
     if (imageChanged) {
       ref.read(receiptTextRecognitionControllerProvider.notifier).clear();
     }
+  }
+
+  void _openReceiptReview({
+    required String imagePath,
+    required String rawOcrText,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppRoutes.receiptReview),
+        builder: (_) => ReceiptReviewScreen(
+          receiptImagePath: imagePath,
+          rawOcrText: rawOcrText,
+        ),
+      ),
+    );
   }
 }
 

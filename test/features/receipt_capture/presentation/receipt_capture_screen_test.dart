@@ -116,7 +116,42 @@ void main() {
     expect(find.text('Raw OCR text'), findsOneWidget);
     expect(find.text('SYNTHETIC MARKET\nTOTAL 12.99 EUR'), findsOneWidget);
     expect(find.byKey(const ValueKey('raw-ocr-text-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('review-receipt-button')), findsOneWidget);
     expect(recognizer.receivedImages, hasLength(1));
+  });
+
+  testWidgets('opens editable review after successful recognition', (
+    tester,
+  ) async {
+    final picker = FakeReceiptImagePicker(
+      result: const ReceiptImageSelected(
+        ReceiptImage(
+          path: 'synthetic-receipt.png',
+          source: ReceiptImageSource.gallery,
+        ),
+      ),
+    );
+    final recognizer = FakeReceiptTextRecognizer(
+      result: const ReceiptTextRecognized(
+        rawText: 'SYNTHETIC MARKET LTD\nDATE 04.09.2026\nTOTAL 12.99 EUR',
+      ),
+    );
+    await _pumpScreen(tester, picker, recognizer: recognizer);
+    await tester.tap(find.byKey(const ValueKey('select-gallery-button')));
+    await tester.pumpAndSettle();
+    await _tapRecognizeText(tester);
+
+    final reviewButton = find.byKey(const ValueKey('review-receipt-button'));
+    await tester.ensureVisible(reviewButton);
+    await tester.tap(reviewButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review receipt'), findsOneWidget);
+    expect(find.text('Review receipt details'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('receipt-review-merchant-field')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('shows a loading state and disables image actions', (
