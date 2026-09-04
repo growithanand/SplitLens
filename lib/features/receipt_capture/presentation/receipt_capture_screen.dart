@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:splitlens/features/receipt_capture/application/receipt_capture_controller.dart';
+import 'package:splitlens/features/receipt_capture/application/receipt_text_recognition_controller.dart';
 import 'package:splitlens/features/receipt_capture/domain/receipt_image.dart';
 
 class ReceiptCaptureScreen extends ConsumerStatefulWidget {
@@ -19,14 +20,18 @@ class _ReceiptCaptureScreenState extends ConsumerState<ReceiptCaptureScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        ref.read(receiptCaptureControllerProvider.notifier).recoverLostImage();
+        _recoverLostImage();
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(receiptCaptureControllerProvider);
+    final captureState = ref.watch(receiptCaptureControllerProvider);
+    final recognitionState = ref.watch(
+      receiptTextRecognitionControllerProvider,
+    );
+    final isBusy = captureState.isSelecting || recognitionState.isRecognizing;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Add a receipt')),
@@ -50,33 +55,36 @@ class _ReceiptCaptureScreenState extends ConsumerState<ReceiptCaptureScreen> {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 24),
-                  _ImagePreview(state: state),
+                  _ImagePreview(state: captureState),
                   const SizedBox(height: 20),
-                  if (state.status == ReceiptCaptureStatus.selecting)
-                    _SelectingNotice(source: state.requestedSource!),
-                  if (state.status == ReceiptCaptureStatus.cancelled)
+                  if (captureState.status == ReceiptCaptureStatus.selecting)
+                    _SelectingNotice(source: captureState.requestedSource!),
+                  if (captureState.status == ReceiptCaptureStatus.cancelled)
                     const _StatusNotice(
                       icon: Icons.info_outline,
                       message:
                           'Image selection was cancelled. Nothing changed.',
                     ),
-                  if (state.status == ReceiptCaptureStatus.failure)
+                  if (captureState.status == ReceiptCaptureStatus.failure)
                     _StatusNotice(
                       icon: Icons.error_outline,
-                      message: state.errorMessage!,
+                      message: captureState.errorMessage!,
                       isError: true,
                     ),
-                  if (state.status == ReceiptCaptureStatus.ready) ...[
+                  if (captureState.status == ReceiptCaptureStatus.ready &&
+                      recognitionState.status ==
+                          ReceiptTextRecognitionStatus.idle) ...[
                     const _StatusNotice(
                       icon: Icons.check_circle_outline,
                       message:
-                          'Receipt image selected. OCR has not been run yet.',
+                          'Receipt image selected. It is ready for on-device '
+                          'text recognition.',
                     ),
                   ],
                   const SizedBox(height: 20),
                   FilledButton.icon(
                     key: const ValueKey('take-photo-button'),
-                    onPressed: state.isSelecting
+                    onPressed: isBusy
                         ? null
                         : () => _selectImage(ReceiptImageSource.camera),
                     icon: const Icon(Icons.photo_camera_outlined),
@@ -85,12 +93,64 @@ class _ReceiptCaptureScreenState extends ConsumerState<ReceiptCaptureScreen> {
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     key: const ValueKey('select-gallery-button'),
-                    onPressed: state.isSelecting
+                    onPressed: isBusy
                         ? null
                         : () => _selectImage(ReceiptImageSource.gallery),
                     icon: const Icon(Icons.photo_library_outlined),
                     label: const Text('Select from gallery'),
                   ),
+                  if (captureState.image case final image?) ...[
+                    const SizedBox(height: 28),
+                    const Divider(),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Recognize receipt text',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Recognition runs on this device. You will review the '
+                      'raw result before SplitLens uses any values.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton.tonalIcon(
+                      key: const ValueKey('recognize-text-button'),
+                      onPressed: isBusy
+                          ? null
+                          : () => ref
+                                .read(
+                                  receiptTextRecognitionControllerProvider
+                                      .notifier,
+                                )
+                                .recognize(image),
+                      icon: const Icon(Icons.document_scanner_outlined),
+                      label: Text(
+                        recognitionState.status ==
+                                ReceiptTextRecognitionStatus.success
+                            ? 'Recognize text again'
+                            : 'Recognize text',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (recognitionState.status ==
+                        ReceiptTextRecognitionStatus.recognizing)
+                      const _StatusNotice(
+                        icon: Icons.hourglass_top,
+                        message: 'Recognizing printed text on this device…',
+                        showProgress: true,
+                      ),
+                    if (recognitionState.status ==
+                        ReceiptTextRecognitionStatus.failure)
+                      _StatusNotice(
+                        icon: Icons.error_outline,
+                        message: recognitionState.errorMessage!,
+                        isError: true,
+                      ),
+                    if (recognitionState.status ==
+                        ReceiptTextRecognitionStatus.success)
+                      _RawTextResult(rawText: recognitionState.rawText!),
+                  ],
                 ],
               ),
             ),
@@ -100,8 +160,39 @@ class _ReceiptCaptureScreenState extends ConsumerState<ReceiptCaptureScreen> {
     );
   }
 
-  void _selectImage(ReceiptImageSource source) {
-    ref.read(receiptCaptureControllerProvider.notifier).selectImage(source);
+  Future<void> _recoverLostImage() async {
+    final previousImage = ref.read(receiptCaptureControllerProvider).image;
+    await ref
+        .read(receiptCaptureControllerProvider.notifier)
+        .recoverLostImage();
+    if (!mounted) {
+      return;
+    }
+
+    _clearRecognitionForChangedImage(previousImage);
+  }
+
+  Future<void> _selectImage(ReceiptImageSource source) async {
+    final previousImage = ref.read(receiptCaptureControllerProvider).image;
+    await ref
+        .read(receiptCaptureControllerProvider.notifier)
+        .selectImage(source);
+    if (!mounted) {
+      return;
+    }
+
+    _clearRecognitionForChangedImage(previousImage);
+  }
+
+  void _clearRecognitionForChangedImage(ReceiptImage? previousImage) {
+    final selectedImage = ref.read(receiptCaptureControllerProvider).image;
+    final imageChanged =
+        selectedImage != null &&
+        (selectedImage.path != previousImage?.path ||
+            selectedImage.source != previousImage?.source);
+    if (imageChanged) {
+      ref.read(receiptTextRecognitionControllerProvider.notifier).clear();
+    }
   }
 }
 
@@ -222,6 +313,48 @@ class _StatusNotice extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(message, style: TextStyle(color: foregroundColor)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RawTextResult extends StatelessWidget {
+  const _RawTextResult({required this.rawText});
+
+  final String rawText;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      key: const ValueKey('raw-ocr-text-card'),
+      color: colorScheme.surfaceContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Raw OCR text',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'This is an unverified recognition result. Receipt values will '
+              'remain editable before they can be saved.',
+            ),
+            const SizedBox(height: 16),
+            SelectionArea(
+              child: Text(
+                rawText,
+                key: const ValueKey('raw-ocr-text'),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(fontFamily: 'monospace'),
+              ),
             ),
           ],
         ),
