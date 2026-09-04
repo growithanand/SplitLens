@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:splitlens/app/navigation/app_routes.dart';
+import 'package:splitlens/features/expense_confirmation/presentation/expense_confirmation_screen.dart';
 import 'package:splitlens/features/receipt_review/application/receipt_review_controller.dart';
 import 'package:splitlens/features/receipt_review/domain/confirmed_receipt_review.dart';
 
@@ -131,7 +133,10 @@ class _ReceiptReviewScreenState extends ConsumerState<ReceiptReviewScreen> {
                   ),
                   if (state.confirmedReceipt case final confirmation?) ...[
                     const SizedBox(height: 20),
-                    _ConfirmedReceiptCard(confirmation: confirmation),
+                    _ConfirmedReceiptCard(
+                      confirmation: confirmation,
+                      onContinue: () => _openExpenseConfirmation(confirmation),
+                    ),
                   ],
                 ],
               ),
@@ -157,6 +162,15 @@ class _ReceiptReviewScreenState extends ConsumerState<ReceiptReviewScreen> {
         const SnackBar(content: Text('Receipt details confirmed.')),
       );
     }
+  }
+
+  void _openExpenseConfirmation(ConfirmedReceiptReview confirmation) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppRoutes.expenseConfirmation),
+        builder: (_) => ExpenseConfirmationScreen(receipt: confirmation),
+      ),
+    );
   }
 }
 
@@ -283,9 +297,13 @@ class _ReviewTextField extends StatelessWidget {
 }
 
 class _ConfirmedReceiptCard extends StatelessWidget {
-  const _ConfirmedReceiptCard({required this.confirmation});
+  const _ConfirmedReceiptCard({
+    required this.confirmation,
+    required this.onContinue,
+  });
 
   final ConfirmedReceiptReview confirmation;
+  final VoidCallback onContinue;
 
   @override
   Widget build(BuildContext context) {
@@ -318,8 +336,15 @@ class _ConfirmedReceiptCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Participant allocation will be connected in the next step.',
+              'The reviewed values are ready for participant allocation.',
               style: TextStyle(color: colorScheme.onPrimaryContainer),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              key: const ValueKey('continue-to-expense-confirmation-button'),
+              onPressed: onContinue,
+              icon: const Icon(Icons.group_outlined),
+              label: const Text('Add participants'),
             ),
           ],
         ),

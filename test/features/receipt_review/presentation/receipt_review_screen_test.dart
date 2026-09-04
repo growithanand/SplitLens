@@ -115,6 +115,37 @@ TOTAL EUR 12.00
     expect(confirmation.total, Money.eur(1450));
     expect(confirmation.rawOcrText, _reliableReceipt);
   });
+
+  testWidgets('continues from a confirmed receipt to participant allocation', (
+    tester,
+  ) async {
+    await _pumpScreen(tester, rawOcrText: _reliableReceipt);
+
+    final confirmButton = find.byKey(
+      const ValueKey('confirm-receipt-review-button'),
+    );
+    await tester.ensureVisible(confirmButton);
+    await tester.tap(confirmButton);
+    await tester.pumpAndSettle();
+
+    final continueButton = find.byKey(
+      const ValueKey('continue-to-expense-confirmation-button'),
+    );
+    await tester.ensureVisible(continueButton);
+    await tester.tap(continueButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Confirm expense'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Split the reviewed receipt'), findsOneWidget);
+    expect(find.text('SYNTHETIC MARKET LTD'), findsOneWidget);
+    expect(find.text('€12.99'), findsOneWidget);
+  });
 }
 
 Future<({ProviderContainer container, ReceiptReviewInput input})> _pumpScreen(
