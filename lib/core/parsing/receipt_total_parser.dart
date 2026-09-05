@@ -60,6 +60,8 @@ final class ReceiptTotalAmbiguous extends ReceiptTotalParseResult {
 
 abstract final class ReceiptTotalParser {
   static const _ambiguityScoreMargin = 4;
+  static const _followingLineWindow = 5;
+  static const _columnEndBonus = 10;
 
   static final _amountExpression = RegExp(
     r'(^|[^A-Za-z0-9])((?:(?:EUR|€)\s*)?[0-9](?:[0-9.,\s]*[0-9])?(?:\s*(?:EUR|€))?)(?=$|[^A-Za-z0-9])',
@@ -161,15 +163,25 @@ abstract final class ReceiptTotalParser {
         ),
       );
 
-      final followingLineIndex = labelLineIndex + 1;
-      if (followingLineIndex < lines.length) {
+      final followingLines = _followingAmountLines(
+        lines: lines,
+        labelLineIndex: labelLineIndex,
+      );
+      final columnEndLines = _columnEndLineIndices(followingLines);
+      for (final followingLine in followingLines) {
+        if (!followingLine.isEligible) {
+          continue;
+        }
         candidates.addAll(
           _candidatesForLine(
-            line: lines[followingLineIndex],
-            amountLineIndex: followingLineIndex,
+            line: followingLine.text,
+            amountLineIndex: followingLine.index,
             lineCount: lines.length,
             labelMatch: labelMatch,
             isLabelLine: false,
+            additionalScore: columnEndLines.contains(followingLine.index)
+                ? _columnEndBonus
+                : 0,
           ),
         );
       }
@@ -210,6 +222,7 @@ abstract final class ReceiptTotalParser {
     required int lineCount,
     required _TotalLabelMatch labelMatch,
     required bool isLabelLine,
+    int additionalScore = 0,
   }) sync* {
     for (final amountMatch in _findAmounts(line)) {
       final proximityScore = isLabelLine
@@ -223,7 +236,8 @@ abstract final class ReceiptTotalParser {
           (isLabelLine ? 30 : 15) +
           proximityScore +
           (amountMatch.hasCurrencyMarker ? 6 : 0) +
-          positionScore;
+          positionScore +
+          additionalScore;
 
       yield ReceiptTotalCandidate(
         money: amountMatch.money,
@@ -286,6 +300,71 @@ abstract final class ReceiptTotalParser {
     }
   }
 
+  static List<_FollowingAmountLine> _followingAmountLines({
+    required List<String> lines,
+    required int labelLineIndex,
+  }) {
+    final followingLines = <_FollowingAmountLine>[];
+    for (var distance = 1; distance <= _followingLineWindow; distance++) {
+      final lineIndex = labelLineIndex + distance;
+      if (lineIndex >= lines.length) {
+        break;
+      }
+
+      final line = lines[lineIndex];
+      if (_findLabel(line) != null && !_looksLikeSubtotal(line)) {
+        break;
+      }
+      final isEligible = !_looksLikeExcludedAmountLine(line);
+      final amounts = isEligible
+          ? _findAmounts(line).toList(growable: false)
+          : const <_AmountMatch>[];
+      followingLines.add(
+        _FollowingAmountLine(
+          text: line,
+          index: lineIndex,
+          isEligible: isEligible,
+          isAmountOnly: _isAmountOnlyLine(line, amounts),
+        ),
+      );
+    }
+    return followingLines;
+  }
+
+  static Set<int> _columnEndLineIndices(List<_FollowingAmountLine> lines) {
+    final columnEndLines = <int>{};
+    var runLength = 0;
+    int? lastAmountLineIndex;
+
+    void finishRun() {
+      if (runLength >= 2) {
+        columnEndLines.add(lastAmountLineIndex!);
+      }
+      runLength = 0;
+      lastAmountLineIndex = null;
+    }
+
+    for (final line in lines) {
+      if (line.isAmountOnly) {
+        runLength++;
+        lastAmountLineIndex = line.index;
+      } else {
+        finishRun();
+      }
+    }
+    finishRun();
+    return columnEndLines;
+  }
+
+  static bool _isAmountOnlyLine(String line, List<_AmountMatch> amounts) {
+    if (amounts.length != 1) {
+      return false;
+    }
+    final amount = amounts.single;
+    return line.substring(0, amount.start).trim().isEmpty &&
+        line.substring(amount.end).trim().isEmpty;
+  }
+
   static int _sameLineProximityScore(
     _TotalLabelMatch label,
     _AmountMatch amount,
@@ -303,6 +382,22 @@ abstract final class ReceiptTotalParser {
     final lettersOnly = line.toUpperCase().replaceAll(_nonLetters, '');
     return lettersOnly.contains('SUBTOTAL') ||
         lettersOnly.contains('ZWISCHENSUMME');
+  }
+
+  static bool _looksLikeExcludedAmountLine(String line) {
+    final lettersOnly = line.toUpperCase().replaceAll(_nonLetters, '');
+    return const [
+      'SUBTOTAL',
+      'ZWISCHENSUMME',
+      'TAX',
+      'VAT',
+      'MWST',
+      'CASH',
+      'TENDER',
+      'CHANGE',
+      'WECHSELGELD',
+      'RUECKGELD',
+    ].any(lettersOnly.contains);
   }
 
   static int _compareCandidates(
@@ -364,4 +459,18 @@ final class _AmountMatch {
   final int start;
   final int end;
   final bool hasCurrencyMarker;
+}
+
+final class _FollowingAmountLine {
+  const _FollowingAmountLine({
+    required this.text,
+    required this.index,
+    required this.isEligible,
+    required this.isAmountOnly,
+  });
+
+  final String text;
+  final int index;
+  final bool isEligible;
+  final bool isAmountOnly;
 }

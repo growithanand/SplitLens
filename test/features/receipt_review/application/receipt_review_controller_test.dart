@@ -55,6 +55,31 @@ TOTAL EUR 12.00
       expect(state.proposals.total.alternatives.toSet(), {'10.00', '12.00'});
     });
 
+    test('prefills a total from column-ordered OCR output', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      const rawOcrText = '''
+SPLITLENS SYNTHETIC MARKET
+04.09.2026
+Coffee
+Bread
+TOTAL
+THANK YOU
+3, 50 EUR
+2,49 EUR
+5,99 EUR
+''';
+      final provider = receiptReviewControllerProvider(_input(rawOcrText));
+
+      final state = container.read(provider);
+
+      expect(state.totalInput, '5.99');
+      expect(
+        state.proposals.total.confidence,
+        ReceiptProposalConfidence.reliable,
+      );
+    });
+
     test('requires every reviewed field before confirmation', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);

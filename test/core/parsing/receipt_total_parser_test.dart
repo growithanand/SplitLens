@@ -126,6 +126,59 @@ ZAHLBETRAG
       expect(candidate.label, ReceiptTotalLabel.zahlbetrag);
     });
 
+    test('reads the total from column-ordered OCR output', () {
+      const receipt = '''
+SPLITLENS SYNTHETIC MARKET
+Coffee
+Bread
+TOTAL
+THANK YOU
+3, 50 EUR
+2,49 EUR
+5,99 EUR
+''';
+
+      final result = ReceiptTotalParser.parse(receipt);
+
+      final candidate = (result as ReceiptTotalFound).candidate;
+      expect(candidate.money, Money.eur(599));
+      expect(candidate.label, ReceiptTotalLabel.total);
+      expect(candidate.sourceText, '5,99 EUR');
+    });
+
+    test('does not mistake payment or change lines for the total', () {
+      const receipt = '''
+TOTAL
+EUR 12.99
+CASH EUR 20.00
+CHANGE EUR 7.01
+''';
+
+      final result = ReceiptTotalParser.parse(receipt);
+
+      expect((result as ReceiptTotalFound).candidate.money, Money.eur(1299));
+    });
+
+    test('does not associate a distant unrelated amount with a label', () {
+      const receipt = '''
+TOTAL
+THANK YOU
+footer one
+footer two
+footer three
+footer four
+UNRELATED EUR 99.00
+''';
+
+      final result = ReceiptTotalParser.parse(receipt);
+
+      expect(result, isA<ReceiptTotalNotFound>());
+      expect(
+        (result as ReceiptTotalNotFound).reason,
+        ReceiptTotalNotFoundReason.noValidAmount,
+      );
+    });
+
     test('does not choose the largest unrelated receipt number', () {
       const receipt = '''
 ITEM 1 EUR 99.00
