@@ -3,11 +3,16 @@ import 'package:splitlens/features/expense_confirmation/domain/expense_repositor
 import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
 
 final class FakeExpenseRepository implements ExpenseRepository {
-  FakeExpenseRepository({this.onSave});
+  FakeExpenseRepository({
+    this.onSave,
+    this.onGetAll,
+    Iterable<PersistedExpense> initialExpenses = const [],
+  }) : _storedExpenses = List.of(initialExpenses);
 
   final Future<PersistedExpense> Function(ConfirmedExpense expense)? onSave;
+  final Future<List<PersistedExpense>> Function()? onGetAll;
   final List<ConfirmedExpense> saveRequests = [];
-  final List<PersistedExpense> _storedExpenses = [];
+  final List<PersistedExpense> _storedExpenses;
 
   @override
   Future<PersistedExpense> save(ConfirmedExpense expense) async {
@@ -31,8 +36,13 @@ final class FakeExpenseRepository implements ExpenseRepository {
   }
 
   @override
-  Future<List<PersistedExpense>> getAll() async =>
-      List.unmodifiable(_storedExpenses);
+  Future<List<PersistedExpense>> getAll() async {
+    final callback = onGetAll;
+    if (callback != null) {
+      return List.unmodifiable(await callback());
+    }
+    return List.unmodifiable(_storedExpenses);
+  }
 }
 
 PersistedExpense _persistedFrom(ConfirmedExpense expense, int expenseIndex) {

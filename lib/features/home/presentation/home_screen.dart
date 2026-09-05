@@ -96,6 +96,15 @@ class HomeScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           OutlinedButton.icon(
+                            key: const ValueKey('view-expense-history-button'),
+                            onPressed: () =>
+                                Navigator.of(context)
+                                    .pushNamed(AppRoutes.expenseHistory),
+                            icon: const Icon(Icons.history_outlined),
+                            label: const Text('View expense history'),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
                             onPressed: () =>
                                 Navigator.of(context)
                                     .pushNamed(AppRoutes.expenseSplit),

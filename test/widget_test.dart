@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:splitlens/app/app.dart';
 import 'package:splitlens/app/navigation/app_routes.dart';
+import 'package:splitlens/data/repositories/expense_repository_provider.dart';
 import 'package:splitlens/features/receipt_capture/application/receipt_capture_controller.dart';
 import 'package:splitlens/features/receipt_capture/domain/receipt_image.dart';
 import 'package:splitlens/features/receipt_capture/domain/receipt_image_picker.dart';
+
+import 'support/fakes/fake_expense_repository.dart';
 
 void main() {
   testWidgets('configures the SplitLens application shell', (tester) async {
@@ -20,6 +23,7 @@ void main() {
     expect(app.initialRoute, AppRoutes.home);
     expect(app.routes?.containsKey(AppRoutes.home), isTrue);
     expect(app.routes?.containsKey(AppRoutes.expenseSplit), isTrue);
+    expect(app.routes?.containsKey(AppRoutes.expenseHistory), isTrue);
     expect(app.routes?.containsKey(AppRoutes.receiptCapture), isTrue);
   });
 
@@ -55,12 +59,27 @@ void main() {
     expect(find.text('Split an expense'), findsOneWidget);
     expect(find.text('Enter the receipt total'), findsOneWidget);
   });
+
+  testWidgets('opens local expense history from home', (tester) async {
+    await _pumpApp(tester);
+
+    final historyButton = find.byKey(
+      const ValueKey('view-expense-history-button'),
+    );
+    await tester.ensureVisible(historyButton);
+    await tester.tap(historyButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Expense history'), findsOneWidget);
+    expect(find.text('No expenses yet'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpApp(WidgetTester tester) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
+        expenseRepositoryProvider.overrideWithValue(FakeExpenseRepository()),
         receiptImagePickerProvider.overrideWithValue(
           const _NoopReceiptImagePicker(),
         ),
