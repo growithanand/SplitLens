@@ -5,4 +5,5 @@ abstract final class AppRoutes {
   static const receiptReview = '/receipt-review';
   static const expenseConfirmation = '/expense-confirmation';
   static const expenseHistory = '/expense-history';
+  static const expenseDetail = '/expense-detail';
 }

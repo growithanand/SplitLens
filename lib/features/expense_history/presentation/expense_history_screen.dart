@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:splitlens/app/navigation/app_routes.dart';
 import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
+import 'package:splitlens/features/expense_detail/presentation/expense_detail_screen.dart';
 import 'package:splitlens/features/expense_history/application/expense_history_controller.dart';
 
 class ExpenseHistoryScreen extends ConsumerWidget {
@@ -171,16 +172,24 @@ class _ExpenseList extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       itemCount: expenses.length,
       separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, index) =>
-          _ExpenseHistoryCard(expense: expenses[index]),
+      itemBuilder: (context, index) => _ExpenseHistoryCard(
+        expense: expenses[index],
+        onOpen: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            settings: const RouteSettings(name: AppRoutes.expenseDetail),
+            builder: (_) => ExpenseDetailScreen(expenseId: expenses[index].id),
+          ),
+        ),
+      ),
     );
   }
 }
 
 class _ExpenseHistoryCard extends StatelessWidget {
-  const _ExpenseHistoryCard({required this.expense});
+  const _ExpenseHistoryCard({required this.expense, required this.onOpen});
 
   final PersistedExpense expense;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -192,55 +201,70 @@ class _ExpenseHistoryCard extends StatelessWidget {
 
     return Card(
       key: ValueKey('expense-history-item-${expense.id}'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              backgroundColor: colorScheme.primaryContainer,
-              foregroundColor: colorScheme.onPrimaryContainer,
-              child: const Icon(Icons.receipt_long_outlined),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: ValueKey('open-expense-${expense.id}'),
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: colorScheme.primaryContainer,
+                foregroundColor: colorScheme.onPrimaryContainer,
+                child: const Icon(Icons.receipt_long_outlined),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      expense.receipt.merchant,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      DateFormat('dd MMM yyyy').format(expense.receipt.date),
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.group_outlined,
+                          size: 18,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(participantLabel),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    expense.receipt.merchant,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    expense.receipt.total.format(),
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('dd MMM yyyy').format(expense.receipt.date),
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: colorScheme.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.group_outlined,
-                        size: 18,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(participantLabel),
-                    ],
+                  const SizedBox(height: 12),
+                  Icon(
+                    Icons.chevron_right,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              expense.receipt.total.format(),
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -63,6 +63,25 @@ void main() {
     expect(find.text('3 participants'), findsOneWidget);
   });
 
+  testWidgets('opens the selected saved expense', (tester) async {
+    final expense = persistedExpenseFixture(
+      id: 'saved-expense',
+      merchant: 'SplitLens Synthetic Market',
+    );
+    await _pumpHistory(
+      tester,
+      FakeExpenseRepository(initialExpenses: [expense]),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-expense-saved-expense')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Expense details'), findsOneWidget);
+    expect(find.text('SplitLens Synthetic Market'), findsOneWidget);
+    expect(find.text('Paid by Anand'), findsOneWidget);
+  });
+
   testWidgets('shows an error and retries the repository read', (tester) async {
     var loadCount = 0;
     final expense = persistedExpenseFixture();

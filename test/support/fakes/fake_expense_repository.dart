@@ -5,11 +5,13 @@ import 'package:splitlens/features/expense_confirmation/domain/persisted_expense
 final class FakeExpenseRepository implements ExpenseRepository {
   FakeExpenseRepository({
     this.onSave,
+    this.onGetById,
     this.onGetAll,
     Iterable<PersistedExpense> initialExpenses = const [],
   }) : _storedExpenses = List.of(initialExpenses);
 
   final Future<PersistedExpense> Function(ConfirmedExpense expense)? onSave;
+  final Future<PersistedExpense?> Function(String expenseId)? onGetById;
   final Future<List<PersistedExpense>> Function()? onGetAll;
   final List<ConfirmedExpense> saveRequests = [];
   final List<PersistedExpense> _storedExpenses;
@@ -27,6 +29,10 @@ final class FakeExpenseRepository implements ExpenseRepository {
 
   @override
   Future<PersistedExpense?> getById(String expenseId) async {
+    final callback = onGetById;
+    if (callback != null) {
+      return callback(expenseId);
+    }
     for (final expense in _storedExpenses) {
       if (expense.id == expenseId) {
         return expense;
