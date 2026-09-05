@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:splitlens/core/money/money.dart';
+import 'package:splitlens/data/repositories/expense_repository_provider.dart';
 import 'package:splitlens/features/expense_confirmation/presentation/expense_confirmation_screen.dart';
+import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
 import 'package:splitlens/features/receipt_review/domain/confirmed_receipt_review.dart';
+
+import '../../../support/fakes/fake_expense_repository.dart';
 
 void main() {
   testWidgets('shows the reviewed receipt as fixed expense context', (
@@ -35,14 +41,11 @@ void main() {
 
       expect(find.text('Add at least one participant.'), findsOneWidget);
       expect(find.text('Select who paid for the expense.'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('confirmed-expense-card')),
-        findsNothing,
-      );
+      expect(find.byKey(const ValueKey('saved-expense-card')), findsNothing);
     },
   );
 
-  testWidgets('confirms a payer and exact participant allocations', (
+  testWidgets('saves a payer and exact participant allocations', (
     tester,
   ) async {
     await _pumpScreen(tester);
@@ -65,23 +68,53 @@ void main() {
     await tester.tap(confirmButton);
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('confirmed-expense-card')),
-      findsOneWidget,
-    );
-    expect(find.text('Expense ready to save'), findsOneWidget);
+    expect(find.byKey(const ValueKey('saved-expense-card')), findsOneWidget);
+    expect(find.text('Expense saved'), findsOneWidget);
     expect(find.text('Paid by Mira'), findsOneWidget);
-    expect(find.text('Expense confirmed in memory.'), findsOneWidget);
+    expect(find.text('Expense saved on this device.'), findsOneWidget);
     expect(
-      find.textContaining('currently held in memory only'),
+      find.textContaining('Stored locally on this device'),
       findsOneWidget,
     );
   });
+
+  testWidgets('shows progress and a retryable save error', (tester) async {
+    final pendingSave = Completer<PersistedExpense>();
+    final repository = FakeExpenseRepository(onSave: (_) => pendingSave.future);
+    await _pumpScreen(tester, repository: repository);
+    await _addParticipant(tester, 'Anand');
+    await tester.tap(find.byKey(const ValueKey('payer-choice-0')));
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('confirm-expense-button'));
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton);
+    await tester.pump();
+
+    expect(find.text('Saving expense…'), findsOneWidget);
+    expect(tester.widget<FilledButton>(saveButton).onPressed, isNull);
+
+    pendingSave.completeError(StateError('synthetic database failure'));
+    await tester.pumpAndSettle();
+    expect(find.text('Expense could not be saved. Try again.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('expense-save-error-card')),
+      findsOneWidget,
+    );
+    expect(tester.widget<FilledButton>(saveButton).onPressed, isNotNull);
+  });
 }
 
-Future<void> _pumpScreen(WidgetTester tester) async {
+Future<void> _pumpScreen(
+  WidgetTester tester, {
+  FakeExpenseRepository? repository,
+}) async {
+  final resolvedRepository = repository ?? FakeExpenseRepository();
   await tester.pumpWidget(
     ProviderScope(
+      overrides: [
+        expenseRepositoryProvider.overrideWithValue(resolvedRepository),
+      ],
       child: MaterialApp(home: ExpenseConfirmationScreen(receipt: _receipt)),
     ),
   );

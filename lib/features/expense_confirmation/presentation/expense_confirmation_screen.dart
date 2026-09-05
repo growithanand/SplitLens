@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:splitlens/features/expense_confirmation/application/expense_confirmation_controller.dart';
-import 'package:splitlens/features/expense_confirmation/domain/confirmed_expense.dart';
+import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
 import 'package:splitlens/features/expense_split/domain/split_participant.dart';
 import 'package:splitlens/features/receipt_review/domain/confirmed_receipt_review.dart';
 
@@ -83,6 +83,7 @@ class _ExpenseConfirmationScreenState
                               state.participantNameError,
                             ),
                           ),
+                          enabled: !state.isSaving,
                           onChanged: (_) => ref
                               .read(
                                 expenseConfirmationControllerProvider(_input)
@@ -97,7 +98,7 @@ class _ExpenseConfirmationScreenState
                         key: const ValueKey(
                           'expense-confirmation-add-participant-button',
                         ),
-                        onPressed: _addParticipant,
+                        onPressed: state.isSaving ? null : _addParticipant,
                         icon: const Icon(Icons.person_add_alt_1),
                         label: const Text('Add'),
                       ),
@@ -112,12 +113,14 @@ class _ExpenseConfirmationScreenState
                       allocationLabels: split!.allocations
                           .map((allocation) => allocation.format())
                           .toList(growable: false),
-                      onRemove: (participantId) => ref
-                          .read(
-                            expenseConfirmationControllerProvider(_input)
-                                .notifier,
-                          )
-                          .removeParticipant(participantId),
+                      onRemove: state.isSaving
+                          ? null
+                          : (participantId) => ref
+                                .read(
+                                  expenseConfirmationControllerProvider(_input)
+                                      .notifier,
+                                )
+                                .removeParticipant(participantId),
                     ),
                   if (state.validationErrors.contains(
                     ExpenseConfirmationValidationError.participantsRequired,
@@ -153,12 +156,15 @@ class _ExpenseConfirmationScreenState
                             key: ValueKey('payer-choice-${participant.id}'),
                             label: Text(participant.name),
                             selected: state.selectedPayerId == participant.id,
-                            onSelected: (_) => ref
-                                .read(
-                                  expenseConfirmationControllerProvider(_input)
-                                      .notifier,
-                                )
-                                .selectPayer(participant.id),
+                            onSelected: state.isSaving
+                                ? null
+                                : (_) => ref
+                                      .read(
+                                        expenseConfirmationControllerProvider(
+                                          _input,
+                                        ).notifier,
+                                      )
+                                      .selectPayer(participant.id),
                           ),
                       ],
                     ),
@@ -185,13 +191,24 @@ class _ExpenseConfirmationScreenState
                   const SizedBox(height: 28),
                   FilledButton.icon(
                     key: const ValueKey('confirm-expense-button'),
-                    onPressed: _confirmExpense,
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: const Text('Confirm expense'),
+                    onPressed: state.isSaving ? null : _saveExpense,
+                    icon: state.isSaving
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.save_outlined),
+                    label: Text(
+                      state.isSaving ? 'Saving expense…' : 'Save expense',
+                    ),
                   ),
-                  if (state.confirmedExpense case final expense?) ...[
+                  if (state.saveErrorMessage case final message?) ...[
+                    const SizedBox(height: 12),
+                    _SaveErrorCard(message: message),
+                  ],
+                  if (state.persistedExpense case final expense?) ...[
                     const SizedBox(height: 20),
-                    _ConfirmedExpenseCard(expense: expense),
+                    _SavedExpenseCard(expense: expense),
                   ],
                 ],
               ),
@@ -211,13 +228,13 @@ class _ExpenseConfirmationScreenState
     }
   }
 
-  void _confirmExpense() {
-    final wasConfirmed = ref
+  Future<void> _saveExpense() async {
+    final wasSaved = await ref
         .read(expenseConfirmationControllerProvider(_input).notifier)
         .confirm();
-    if (wasConfirmed) {
+    if (wasSaved && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Expense confirmed in memory.')),
+        const SnackBar(content: Text('Expense saved on this device.')),
       );
     }
   }
@@ -290,7 +307,7 @@ class _ParticipantAllocationList extends StatelessWidget {
 
   final List<SplitParticipant> participants;
   final List<String> allocationLabels;
-  final ValueChanged<int> onRemove;
+  final ValueChanged<int>? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -316,7 +333,9 @@ class _ParticipantAllocationList extends StatelessWidget {
                     key: ValueKey(
                       'expense-confirmation-remove-${participants[index].id}',
                     ),
-                    onPressed: () => onRemove(participants[index].id),
+                    onPressed: onRemove == null
+                        ? null
+                        : () => onRemove!(participants[index].id),
                     tooltip: 'Remove ${participants[index].name}',
                     icon: const Icon(Icons.remove_circle_outline),
                   ),
@@ -365,16 +384,46 @@ class _RoundingSummary extends StatelessWidget {
   }
 }
 
-class _ConfirmedExpenseCard extends StatelessWidget {
-  const _ConfirmedExpenseCard({required this.expense});
+class _SaveErrorCard extends StatelessWidget {
+  const _SaveErrorCard({required this.message});
 
-  final ConfirmedExpense expense;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Card(
-      key: const ValueKey('confirmed-expense-card'),
+      key: const ValueKey('expense-save-error-card'),
+      color: colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: colorScheme.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedExpenseCard extends StatelessWidget {
+  const _SavedExpenseCard({required this.expense});
+
+  final PersistedExpense expense;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      key: const ValueKey('saved-expense-card'),
       color: colorScheme.primaryContainer,
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -386,7 +435,7 @@ class _ConfirmedExpenseCard extends StatelessWidget {
                 Icon(Icons.check_circle, color: colorScheme.onPrimaryContainer),
                 const SizedBox(width: 8),
                 Text(
-                  'Expense ready to save',
+                  'Expense saved',
                   style: Theme.of(context).textTheme.titleMedium
                       ?.copyWith(color: colorScheme.onPrimaryContainer),
                 ),
@@ -422,8 +471,8 @@ class _ConfirmedExpenseCard extends StatelessWidget {
               ),
             const SizedBox(height: 8),
             Text(
-              'This confirmation is currently held in memory only. '
-              'Local saving is the next implementation step.',
+              'Stored locally on this device. Expense history will be '
+              'connected in the next step.',
               style: TextStyle(color: colorScheme.onPrimaryContainer),
             ),
           ],

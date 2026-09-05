@@ -1,12 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:splitlens/core/money/equal_split.dart';
+import 'package:splitlens/data/repositories/expense_repository_provider.dart';
 import 'package:splitlens/features/expense_confirmation/domain/confirmed_expense.dart';
+import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
 import 'package:splitlens/features/expense_split/domain/split_participant.dart';
 import 'package:splitlens/features/receipt_review/domain/confirmed_receipt_review.dart';
 
 enum ExpenseParticipantNameError { blank, duplicate }
 
 enum ExpenseConfirmationValidationError { participantsRequired, payerRequired }
+
+enum ExpenseSaveStatus { editing, saving, saved, failure }
 
 final class ExpenseConfirmationInput {
   const ExpenseConfirmationInput(this.receipt);
@@ -28,7 +32,10 @@ final class ExpenseConfirmationState {
     this.selectedPayerId,
     this.participantNameError,
     Iterable<ExpenseConfirmationValidationError> validationErrors = const [],
+    this.saveStatus = ExpenseSaveStatus.editing,
     this.confirmedExpense,
+    this.persistedExpense,
+    this.saveErrorMessage,
   }) : participants = List.unmodifiable(participants),
        validationErrors = Set.unmodifiable(validationErrors);
 
@@ -37,7 +44,12 @@ final class ExpenseConfirmationState {
   final int? selectedPayerId;
   final ExpenseParticipantNameError? participantNameError;
   final Set<ExpenseConfirmationValidationError> validationErrors;
+  final ExpenseSaveStatus saveStatus;
   final ConfirmedExpense? confirmedExpense;
+  final PersistedExpense? persistedExpense;
+  final String? saveErrorMessage;
+
+  bool get isSaving => saveStatus == ExpenseSaveStatus.saving;
 
   EqualSplitSuccess? get split {
     if (participants.isEmpty) {
@@ -106,7 +118,10 @@ final class ExpenseConfirmationController
                 ExpenseConfirmationValidationError.participantsRequired,
           )
           .toSet(),
+      saveStatus: ExpenseSaveStatus.editing,
       clearConfirmedExpense: true,
+      clearPersistedExpense: true,
+      clearSaveErrorMessage: true,
     );
     return true;
   }
@@ -131,7 +146,10 @@ final class ExpenseConfirmationController
       selectedPayerId: removedSelectedPayer ? null : state.selectedPayerId,
       clearSelectedPayer: removedSelectedPayer,
       validationErrors: updatedErrors,
+      saveStatus: ExpenseSaveStatus.editing,
       clearConfirmedExpense: true,
+      clearPersistedExpense: true,
+      clearSaveErrorMessage: true,
     );
   }
 
@@ -151,7 +169,10 @@ final class ExpenseConfirmationController
                 error != ExpenseConfirmationValidationError.payerRequired,
           )
           .toSet(),
+      saveStatus: ExpenseSaveStatus.editing,
       clearConfirmedExpense: true,
+      clearPersistedExpense: true,
+      clearSaveErrorMessage: true,
     );
   }
 
@@ -162,7 +183,7 @@ final class ExpenseConfirmationController
     _replaceState(clearParticipantNameError: true);
   }
 
-  bool confirm() {
+  Future<bool> confirm() async {
     final errors = <ExpenseConfirmationValidationError>{};
     if (state.participants.isEmpty) {
       errors.add(ExpenseConfirmationValidationError.participantsRequired);
@@ -174,7 +195,13 @@ final class ExpenseConfirmationController
 
     final split = state.split;
     if (errors.isNotEmpty || split == null) {
-      _replaceState(validationErrors: errors, clearConfirmedExpense: true);
+      _replaceState(
+        validationErrors: errors,
+        saveStatus: ExpenseSaveStatus.editing,
+        clearConfirmedExpense: true,
+        clearPersistedExpense: true,
+        clearSaveErrorMessage: true,
+      );
       return false;
     }
 
@@ -192,9 +219,30 @@ final class ExpenseConfirmationController
     );
     _replaceState(
       validationErrors: const {},
+      saveStatus: ExpenseSaveStatus.saving,
       confirmedExpense: confirmedExpense,
+      clearPersistedExpense: true,
+      clearSaveErrorMessage: true,
     );
-    return true;
+
+    try {
+      final persistedExpense = await ref
+          .read(expenseRepositoryProvider)
+          .save(confirmedExpense);
+      _replaceState(
+        saveStatus: ExpenseSaveStatus.saved,
+        persistedExpense: persistedExpense,
+        clearSaveErrorMessage: true,
+      );
+      return true;
+    } on Object {
+      _replaceState(
+        saveStatus: ExpenseSaveStatus.failure,
+        saveErrorMessage: 'Expense could not be saved. Try again.',
+        clearPersistedExpense: true,
+      );
+      return false;
+    }
   }
 
   void _replaceState({
@@ -204,8 +252,13 @@ final class ExpenseConfirmationController
     ExpenseParticipantNameError? participantNameError,
     bool clearParticipantNameError = false,
     Iterable<ExpenseConfirmationValidationError>? validationErrors,
+    ExpenseSaveStatus? saveStatus,
     ConfirmedExpense? confirmedExpense,
     bool clearConfirmedExpense = false,
+    PersistedExpense? persistedExpense,
+    bool clearPersistedExpense = false,
+    String? saveErrorMessage,
+    bool clearSaveErrorMessage = false,
   }) {
     state = ExpenseConfirmationState(
       receipt: state.receipt,
@@ -217,9 +270,16 @@ final class ExpenseConfirmationController
           ? null
           : participantNameError ?? state.participantNameError,
       validationErrors: validationErrors ?? state.validationErrors,
+      saveStatus: saveStatus ?? state.saveStatus,
       confirmedExpense: clearConfirmedExpense
           ? null
           : confirmedExpense ?? state.confirmedExpense,
+      persistedExpense: clearPersistedExpense
+          ? null
+          : persistedExpense ?? state.persistedExpense,
+      saveErrorMessage: clearSaveErrorMessage
+          ? null
+          : saveErrorMessage ?? state.saveErrorMessage,
     );
   }
 }
