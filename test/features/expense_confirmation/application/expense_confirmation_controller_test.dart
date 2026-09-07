@@ -102,7 +102,7 @@ void main() {
       expect(scope.repository.saveRequests.single, same(expense));
     });
 
-    test('removing the payer invalidates an existing save', () async {
+    test('locks editing and prevents duplicate saves after success', () async {
       final scope = _createScope();
       addTearDown(scope.container.dispose);
       final provider = expenseConfirmationControllerProvider(scope.input);
@@ -112,17 +112,25 @@ void main() {
         ..addParticipant('Mira');
       final payerId = scope.container.read(provider).participants.first.id;
       controller.selectPayer(payerId);
-      await controller.confirm();
+      expect(await controller.confirm(), isTrue);
+
+      expect(controller.addParticipant('Jonas'), isFalse);
       controller.removeParticipant(payerId);
+      controller.selectPayer(
+        scope.container.read(provider).participants.last.id,
+      );
+      expect(await controller.confirm(), isFalse);
 
       final state = scope.container.read(provider);
-      expect(state.selectedPayer, isNull);
-      expect(state.confirmedExpense, isNull);
-      expect(state.persistedExpense, isNull);
-      expect(
-        state.validationErrors,
-        contains(ExpenseConfirmationValidationError.payerRequired),
-      );
+      expect(state.participants.map((participant) => participant.name), [
+        'Anand',
+        'Mira',
+      ]);
+      expect(state.selectedPayer?.name, 'Anand');
+      expect(state.confirmedExpense, isNotNull);
+      expect(state.persistedExpense, isNotNull);
+      expect(state.saveStatus, ExpenseSaveStatus.saved);
+      expect(scope.repository.saveRequests, hasLength(1));
     });
 
     test('exposes saving and safe failure states', () async {

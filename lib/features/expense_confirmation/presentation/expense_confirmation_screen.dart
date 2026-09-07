@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:splitlens/app/navigation/app_routes.dart';
 import 'package:splitlens/features/expense_confirmation/application/expense_confirmation_controller.dart';
 import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
+import 'package:splitlens/features/expense_detail/presentation/expense_detail_screen.dart';
 import 'package:splitlens/features/expense_split/domain/split_participant.dart';
 import 'package:splitlens/features/receipt_review/domain/confirmed_receipt_review.dart';
 
@@ -65,44 +67,40 @@ class _ExpenseConfirmationScreenState
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          key: const ValueKey(
-                            'expense-confirmation-participant-field',
-                          ),
-                          controller: _participantController,
-                          textCapitalization: TextCapitalization.words,
-                          textInputAction: TextInputAction.done,
-                          decoration: InputDecoration(
-                            labelText: 'Participant name',
-                            border: const OutlineInputBorder(),
-                            errorText: _participantNameErrorText(
-                              state.participantNameError,
-                            ),
-                          ),
-                          enabled: !state.isSaving,
-                          onChanged: (_) => ref
-                              .read(
-                                expenseConfirmationControllerProvider(_input)
-                                    .notifier,
-                              )
-                              .clearParticipantNameError(),
-                          onSubmitted: (_) => _addParticipant(),
+                  _ParticipantEntry(
+                    field: TextField(
+                      key: const ValueKey(
+                        'expense-confirmation-participant-field',
+                      ),
+                      controller: _participantController,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.done,
+                      decoration: InputDecoration(
+                        labelText: 'Participant name',
+                        border: const OutlineInputBorder(),
+                        errorText: _participantNameErrorText(
+                          state.participantNameError,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      FilledButton.icon(
-                        key: const ValueKey(
-                          'expense-confirmation-add-participant-button',
-                        ),
-                        onPressed: state.isSaving ? null : _addParticipant,
-                        icon: const Icon(Icons.person_add_alt_1),
-                        label: const Text('Add'),
+                      enabled: !state.isInteractionLocked,
+                      onChanged: (_) => ref
+                          .read(
+                            expenseConfirmationControllerProvider(_input)
+                                .notifier,
+                          )
+                          .clearParticipantNameError(),
+                      onSubmitted: (_) => _addParticipant(),
+                    ),
+                    action: FilledButton.icon(
+                      key: const ValueKey(
+                        'expense-confirmation-add-participant-button',
                       ),
-                    ],
+                      onPressed: state.isInteractionLocked
+                          ? null
+                          : _addParticipant,
+                      icon: const Icon(Icons.person_add_alt_1),
+                      label: const Text('Add'),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   if (state.participants.isEmpty)
@@ -113,7 +111,7 @@ class _ExpenseConfirmationScreenState
                       allocationLabels: split!.allocations
                           .map((allocation) => allocation.format())
                           .toList(growable: false),
-                      onRemove: state.isSaving
+                      onRemove: state.isInteractionLocked
                           ? null
                           : (participantId) => ref
                                 .read(
@@ -156,7 +154,7 @@ class _ExpenseConfirmationScreenState
                             key: ValueKey('payer-choice-${participant.id}'),
                             label: Text(participant.name),
                             selected: state.selectedPayerId == participant.id,
-                            onSelected: state.isSaving
+                            onSelected: state.isInteractionLocked
                                 ? null
                                 : (_) => ref
                                       .read(
@@ -191,16 +189,20 @@ class _ExpenseConfirmationScreenState
                   const SizedBox(height: 28),
                   FilledButton.icon(
                     key: const ValueKey('confirm-expense-button'),
-                    onPressed: state.isSaving ? null : _saveExpense,
+                    onPressed: state.isInteractionLocked ? null : _saveExpense,
                     icon: state.isSaving
                         ? const SizedBox.square(
                             dimension: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
+                        : state.saveStatus == ExpenseSaveStatus.saved
+                        ? const Icon(Icons.check_circle_outline)
                         : const Icon(Icons.save_outlined),
-                    label: Text(
-                      state.isSaving ? 'Saving expense…' : 'Save expense',
-                    ),
+                    label: Text(switch (state.saveStatus) {
+                      ExpenseSaveStatus.saving => 'Saving expense…',
+                      ExpenseSaveStatus.saved => 'Saved',
+                      _ => 'Save expense',
+                    }),
                   ),
                   if (state.saveErrorMessage case final message?) ...[
                     const SizedBox(height: 12),
@@ -208,7 +210,10 @@ class _ExpenseConfirmationScreenState
                   ],
                   if (state.persistedExpense case final expense?) ...[
                     const SizedBox(height: 20),
-                    _SavedExpenseCard(expense: expense),
+                    _SavedExpenseCard(
+                      expense: expense,
+                      onOpen: () => _openExpenseDetails(expense.id),
+                    ),
                   ],
                 ],
               ),
@@ -238,6 +243,47 @@ class _ExpenseConfirmationScreenState
       );
     }
   }
+
+  void _openExpenseDetails(String expenseId) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppRoutes.expenseDetail),
+        builder: (_) => ExpenseDetailScreen(expenseId: expenseId),
+      ),
+    );
+  }
+}
+
+class _ParticipantEntry extends StatelessWidget {
+  const _ParticipantEntry({required this.field, required this.action});
+
+  final Widget field;
+  final Widget action;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      key: const ValueKey('expense-confirmation-participant-entry'),
+      builder: (context, constraints) {
+        final usesLargeText = MediaQuery.textScalerOf(context).scale(16) > 22;
+        if (constraints.maxWidth < 340 || usesLargeText) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [field, const SizedBox(height: 12), action],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: field),
+            const SizedBox(width: 12),
+            action,
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _ReviewedReceiptCard extends StatelessWidget {
@@ -254,25 +300,7 @@ class _ReviewedReceiptCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.receipt_long_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    receipt.merchant,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                Text(
-                  receipt.total.format(),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ],
-            ),
+            _ReviewedReceiptHeader(receipt: receipt),
             const SizedBox(height: 8),
             Text('${_formatDate(receipt.date)} · ${receipt.currencyCode}'),
             const SizedBox(height: 4),
@@ -280,6 +308,61 @@ class _ReviewedReceiptCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ReviewedReceiptHeader extends StatelessWidget {
+  const _ReviewedReceiptHeader({required this.receipt});
+
+  final ConfirmedReceiptReview receipt;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(
+      Icons.receipt_long_outlined,
+      color: Theme.of(context).colorScheme.primary,
+    );
+    final merchant = Text(
+      receipt.merchant,
+      style: Theme.of(context).textTheme.titleMedium,
+    );
+    final total = Text(
+      receipt.total.format(),
+      style: Theme.of(context).textTheme.titleLarge,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final usesLargeText = MediaQuery.textScalerOf(context).scale(16) > 22;
+        if (constraints.maxWidth < 300 || usesLargeText) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  icon,
+                  const SizedBox(width: 8),
+                  Expanded(child: merchant),
+                ],
+              ),
+              const SizedBox(height: 8),
+              total,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            icon,
+            const SizedBox(width: 8),
+            Expanded(child: merchant),
+            const SizedBox(width: 8),
+            total,
+          ],
+        );
+      },
     );
   }
 }
@@ -311,6 +394,9 @@ class _ParticipantAllocationList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final usesCompactRows =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(16) > 22;
     return Card(
       key: const ValueKey('expense-allocation-list'),
       clipBehavior: Clip.antiAlias,
@@ -321,14 +407,19 @@ class _ParticipantAllocationList extends StatelessWidget {
             ListTile(
               leading: CircleAvatar(child: Text('${index + 1}')),
               title: Text(participants[index].name),
-              subtitle: const Text('Equal allocation'),
+              subtitle: Text(
+                usesCompactRows
+                    ? 'Equal allocation · ${allocationLabels[index]}'
+                    : 'Equal allocation',
+              ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    allocationLabels[index],
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  if (!usesCompactRows)
+                    Text(
+                      allocationLabels[index],
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   IconButton(
                     key: ValueKey(
                       'expense-confirmation-remove-${participants[index].id}',
@@ -392,22 +483,25 @@ class _SaveErrorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      key: const ValueKey('expense-save-error-card'),
-      color: colorScheme.errorContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(color: colorScheme.onErrorContainer),
+    return Semantics(
+      liveRegion: true,
+      child: Card(
+        key: const ValueKey('expense-save-error-card'),
+        color: colorScheme.errorContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(color: colorScheme.onErrorContainer),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -415,67 +509,87 @@ class _SaveErrorCard extends StatelessWidget {
 }
 
 class _SavedExpenseCard extends StatelessWidget {
-  const _SavedExpenseCard({required this.expense});
+  const _SavedExpenseCard({required this.expense, required this.onOpen});
 
   final PersistedExpense expense;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      key: const ValueKey('saved-expense-card'),
-      color: colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.check_circle, color: colorScheme.onPrimaryContainer),
-                const SizedBox(width: 8),
-                Text(
-                  'Expense saved',
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(color: colorScheme.onPrimaryContainer),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${expense.receipt.merchant} · ${expense.receipt.total.format()}',
-              style: TextStyle(color: colorScheme.onPrimaryContainer),
-            ),
-            Text(
-              'Paid by ${expense.paidBy.name}',
-              style: TextStyle(color: colorScheme.onPrimaryContainer),
-            ),
-            const SizedBox(height: 12),
-            for (final allocation in expense.allocations)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        allocation.participant.name,
+    return Semantics(
+      liveRegion: true,
+      child: Card(
+        key: const ValueKey('saved-expense-card'),
+        color: colorScheme.primaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Expense saved',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(color: colorScheme.onPrimaryContainer),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${expense.receipt.merchant} · '
+                '${expense.receipt.total.format()}',
+                style: TextStyle(color: colorScheme.onPrimaryContainer),
+              ),
+              Text(
+                'Paid by ${expense.paidBy.name}',
+                style: TextStyle(color: colorScheme.onPrimaryContainer),
+              ),
+              const SizedBox(height: 12),
+              for (final allocation in expense.allocations)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          allocation.participant.name,
+                          style: TextStyle(
+                            color: colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        allocation.amount.format(),
                         style: TextStyle(color: colorScheme.onPrimaryContainer),
                       ),
-                    ),
-                    Text(
-                      allocation.amount.format(),
-                      style: TextStyle(color: colorScheme.onPrimaryContainer),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+              const SizedBox(height: 8),
+              Text(
+                'Stored locally on this device. You can reopen it from '
+                'expense history.',
+                style: TextStyle(color: colorScheme.onPrimaryContainer),
               ),
-            const SizedBox(height: 8),
-            Text(
-              'Stored locally on this device. Expense history will be '
-              'connected in the next step.',
-              style: TextStyle(color: colorScheme.onPrimaryContainer),
-            ),
-          ],
+              const SizedBox(height: 12),
+              FilledButton.tonalIcon(
+                key: const ValueKey('view-saved-expense-button'),
+                onPressed: onOpen,
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('View saved expense'),
+              ),
+            ],
+          ),
         ),
       ),
     );

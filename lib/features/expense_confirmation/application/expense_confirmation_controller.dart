@@ -50,6 +50,9 @@ final class ExpenseConfirmationState {
   final String? saveErrorMessage;
 
   bool get isSaving => saveStatus == ExpenseSaveStatus.saving;
+  bool get isInteractionLocked =>
+      saveStatus == ExpenseSaveStatus.saving ||
+      saveStatus == ExpenseSaveStatus.saved;
 
   EqualSplitSuccess? get split {
     if (participants.isEmpty) {
@@ -90,6 +93,10 @@ final class ExpenseConfirmationController
       ExpenseConfirmationState(receipt: input.receipt);
 
   bool addParticipant(String input) {
+    if (state.isInteractionLocked) {
+      return false;
+    }
+
     final name = input.trim();
     if (name.isEmpty) {
       _replaceState(participantNameError: ExpenseParticipantNameError.blank);
@@ -127,6 +134,10 @@ final class ExpenseConfirmationController
   }
 
   void removeParticipant(int participantId) {
+    if (state.isInteractionLocked) {
+      return;
+    }
+
     final updatedParticipants = state.participants
         .where((participant) => participant.id != participantId)
         .toList(growable: false);
@@ -154,6 +165,10 @@ final class ExpenseConfirmationController
   }
 
   void selectPayer(int participantId) {
+    if (state.isInteractionLocked) {
+      return;
+    }
+
     final isParticipant = state.participants.any(
       (participant) => participant.id == participantId,
     );
@@ -184,6 +199,10 @@ final class ExpenseConfirmationController
   }
 
   Future<bool> confirm() async {
+    if (state.isInteractionLocked) {
+      return false;
+    }
+
     final errors = <ExpenseConfirmationValidationError>{};
     if (state.participants.isEmpty) {
       errors.add(ExpenseConfirmationValidationError.participantsRequired);

@@ -76,6 +76,44 @@ void main() {
       find.textContaining('Stored locally on this device'),
       findsOneWidget,
     );
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+    expect(
+      find.byKey(const ValueKey('view-saved-expense-button')),
+      findsOneWidget,
+    );
+
+    final viewSavedExpenseButton = find.byKey(
+      const ValueKey('view-saved-expense-button'),
+    );
+    await tester.ensureVisible(viewSavedExpenseButton);
+    await tester.tap(viewSavedExpenseButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Expense details'), findsOneWidget);
+    expect(find.text('Synthetic Market'), findsOneWidget);
+  });
+
+  testWidgets('adapts participant entry for a narrow large-text screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpScreen(tester, textScaler: const TextScaler.linear(2));
+
+    final field = find.byKey(
+      const ValueKey('expense-confirmation-participant-field'),
+    );
+    final addButton = find.byKey(
+      const ValueKey('expense-confirmation-add-participant-button'),
+    );
+    expect(
+      tester.getTopLeft(addButton).dy,
+      greaterThan(tester.getBottomLeft(field).dy),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('shows progress and a retryable save error', (tester) async {
@@ -108,6 +146,7 @@ void main() {
 Future<void> _pumpScreen(
   WidgetTester tester, {
   FakeExpenseRepository? repository,
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
   final resolvedRepository = repository ?? FakeExpenseRepository();
   await tester.pumpWidget(
@@ -115,7 +154,13 @@ Future<void> _pumpScreen(
       overrides: [
         expenseRepositoryProvider.overrideWithValue(resolvedRepository),
       ],
-      child: MaterialApp(home: ExpenseConfirmationScreen(receipt: _receipt)),
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
+        home: ExpenseConfirmationScreen(receipt: _receipt),
+      ),
     ),
   );
   await tester.pumpAndSettle();
