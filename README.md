@@ -41,6 +41,7 @@ currency, and total remain editable and require explicit confirmation.
 | Participant and payer selection | Implemented |
 | Integer-cent equal splitting with deterministic remainders | Implemented |
 | Transactional local persistence with Drift and SQLite | Implemented |
+| Private app-owned receipt image storage | Implemented |
 | Local expense history | Implemented |
 | Expense details, allocations, receipt image, and raw OCR | Implemented |
 | Loading, empty, validation, and retryable error states | Implemented |
@@ -131,7 +132,8 @@ Ambiguous or missing proposals remain blank or uncertain for manual review.
 - Receipt text recognition runs on the Android device.
 - SplitLens does not send receipt images to an external OCR API.
 - Confirmed expenses, raw OCR text, and receipt-image references are stored
-  locally.
+  locally. Receipt images are copied into private SplitLens application storage
+  when an expense is saved.
 - The repository contains synthetic test data only.
 - Real receipts containing addresses, card details, or transaction identifiers
   must not be committed to the repository.
@@ -209,23 +211,7 @@ Only synthetic or fully anonymized receipts will be used.
 - Only EUR expenses are supported.
 - OCR and parser quality depends on image clarity and receipt layout.
 - Handwritten and non-Latin receipts are outside the current scope.
-- Receipt images are referenced at their selected device location. Android may
-  later remove a cached image, in which case SplitLens displays an unavailable
-  image state while retaining the confirmed expense and raw OCR text.
 - Saved expenses are currently read-only; editing and deletion are not
   implemented.
 - There is no authentication, backend, cloud backup, shared group, or
   synchronization.
-
-## Roadmap
-
-Before the v0.1 release:
-
-- Expand parser edge-case coverage with more synthetic layouts
-- Complete accessibility and small-screen checks
-- Add anonymized screenshots and a short demo video
-- Verify Android release-build configuration
-- Document an OCR evaluation template
-
-Possible later versions may explore a backend and synchronization, but no
-online collaboration capability is currently claimed or implemented.

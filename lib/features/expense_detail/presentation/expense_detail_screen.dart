@@ -309,7 +309,7 @@ class _ReceiptImageSection extends StatelessWidget {
         key: const ValueKey('expense-receipt-image-section'),
         leading: const Icon(Icons.image_outlined),
         title: const Text('Original receipt image'),
-        subtitle: const Text('Stored device reference'),
+        subtitle: const Text('Stored privately on this device'),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
           ClipRRect(

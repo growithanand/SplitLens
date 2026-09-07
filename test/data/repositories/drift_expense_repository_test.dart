@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:splitlens/core/money/money.dart';
@@ -6,13 +8,16 @@ import 'package:splitlens/data/database/app_database.dart';
 import 'package:splitlens/data/repositories/drift_expense_repository.dart';
 import 'package:splitlens/features/expense_confirmation/domain/confirmed_expense.dart';
 import 'package:splitlens/features/expense_split/domain/split_participant.dart';
+import 'package:splitlens/features/receipt_capture/domain/receipt_image_storage.dart';
 import 'package:splitlens/features/receipt_review/domain/confirmed_receipt_review.dart';
 
 void main() {
   late AppDatabase database;
+  late _FakeReceiptImageStorage imageStorage;
 
   setUp(() {
     database = AppDatabase.forTesting(NativeDatabase.memory());
+    imageStorage = _FakeReceiptImageStorage();
   });
 
   tearDown(() async {
@@ -23,6 +28,7 @@ void main() {
     final repository = DriftExpenseRepository.withDependencies(
       database,
       _CountingIdGenerator(),
+      imageStorage,
       clock: () => DateTime.utc(2026, 9, 5, 2, 30),
     );
 
@@ -33,7 +39,7 @@ void main() {
     expect(retrieved, isNotNull);
     expect(retrieved!.receipt.merchant, 'Synthetic Market');
     expect(retrieved.receipt.total, Money.eur(599));
-    expect(retrieved.receipt.receiptImagePath, 'synthetic-receipt.png');
+    expect(retrieved.receipt.receiptImagePath, 'managed-id-0.png');
     expect(retrieved.receipt.rawOcrText, 'SYNTHETIC MARKET\nTOTAL EUR 5.99');
     expect(retrieved.paidBy.name, 'Anand');
     expect(
@@ -44,6 +50,10 @@ void main() {
     );
     expect(retrieved.createdAt, DateTime.utc(2026, 9, 5, 2, 30));
     expect(retrieved.createdAt.isUtc, isTrue);
+    expect(imageStorage.persistRequests, [
+      (sourcePath: 'synthetic-receipt.png', imageId: 'id-0'),
+    ]);
+    expect(imageStorage.deletedPaths, isEmpty);
     expect(await database.select(database.expenses).get(), hasLength(1));
     expect(await database.select(database.participants).get(), hasLength(2));
     expect(
@@ -62,6 +72,7 @@ void main() {
       final repository = DriftExpenseRepository.withDependencies(
         database,
         _CountingIdGenerator(),
+        imageStorage,
         clock: () {
           times.moveNext();
           return times.current;
@@ -90,6 +101,7 @@ void main() {
         'duplicate-participant-id',
         'duplicate-participant-id',
       ]),
+      imageStorage,
       clock: () => DateTime.utc(2026, 9, 5, 2, 30),
     );
 
@@ -98,12 +110,29 @@ void main() {
     expect(await database.select(database.expenses).get(), isEmpty);
     expect(await database.select(database.participants).get(), isEmpty);
     expect(await database.select(database.expenseAllocations).get(), isEmpty);
+    expect(imageStorage.deletedPaths, ['managed-expense-id.png']);
+  });
+
+  test('does not write database rows when image storage fails', () async {
+    imageStorage.failure = FileSystemException('Synthetic copy failure');
+    final repository = DriftExpenseRepository.withDependencies(
+      database,
+      _CountingIdGenerator(),
+      imageStorage,
+    );
+
+    await expectLater(repository.save(_expense()), throwsA(isA<Exception>()));
+
+    expect(await database.select(database.expenses).get(), isEmpty);
+    expect(await database.select(database.participants).get(), isEmpty);
+    expect(imageStorage.deletedPaths, isEmpty);
   });
 
   test('rejects allocations that do not equal the receipt total', () async {
     final repository = DriftExpenseRepository.withDependencies(
       database,
       _CountingIdGenerator(),
+      imageStorage,
     );
     final invalid = _expense(allocationCents: [300, 300]);
 
@@ -111,6 +140,7 @@ void main() {
 
     expect(await database.select(database.expenses).get(), isEmpty);
     expect(await database.select(database.participants).get(), isEmpty);
+    expect(imageStorage.persistRequests, isEmpty);
   });
 }
 
@@ -157,4 +187,28 @@ final class _SequenceIdGenerator implements LocalIdGenerator {
 
   @override
   String generate() => _ids[_index++];
+}
+
+final class _FakeReceiptImageStorage implements ReceiptImageStorage {
+  final List<({String sourcePath, String imageId})> persistRequests = [];
+  final List<String> deletedPaths = [];
+  Object? failure;
+
+  @override
+  Future<String> persist({
+    required String sourcePath,
+    required String imageId,
+  }) async {
+    persistRequests.add((sourcePath: sourcePath, imageId: imageId));
+    final error = failure;
+    if (error != null) {
+      throw error;
+    }
+    return 'managed-$imageId.png';
+  }
+
+  @override
+  Future<void> delete(String storedPath) async {
+    deletedPaths.add(storedPath);
+  }
 }

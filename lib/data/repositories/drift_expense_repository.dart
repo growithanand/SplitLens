@@ -5,96 +5,127 @@ import 'package:splitlens/data/database/app_database.dart';
 import 'package:splitlens/features/expense_confirmation/domain/confirmed_expense.dart';
 import 'package:splitlens/features/expense_confirmation/domain/expense_repository.dart';
 import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
+import 'package:splitlens/features/receipt_capture/domain/receipt_image_storage.dart';
 import 'package:splitlens/features/receipt_review/domain/confirmed_receipt_review.dart';
 
 final class DriftExpenseRepository implements ExpenseRepository {
-  DriftExpenseRepository(AppDatabase database)
-    : this.withDependencies(database, const UuidV4LocalIdGenerator());
+  DriftExpenseRepository(
+    AppDatabase database,
+    ReceiptImageStorage receiptImageStorage,
+  ) : this.withDependencies(
+        database,
+        const UuidV4LocalIdGenerator(),
+        receiptImageStorage,
+      );
 
   DriftExpenseRepository.withDependencies(
     this._database,
-    this._idGenerator, {
+    this._idGenerator,
+    this._receiptImageStorage, {
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
   final AppDatabase _database;
   final LocalIdGenerator _idGenerator;
+  final ReceiptImageStorage _receiptImageStorage;
   final DateTime Function() _clock;
 
   @override
   Future<PersistedExpense> save(ConfirmedExpense expense) async {
     _validate(expense);
 
-    return _database.transaction(() async {
-      final expenseId = _idGenerator.generate();
-      final recordedAt = _clock().toUtc();
-      final storedParticipants = <int, PersistedParticipant>{};
+    final expenseId = _idGenerator.generate();
+    final storedImagePath = await _receiptImageStorage.persist(
+      sourcePath: expense.receipt.receiptImagePath,
+      imageId: expenseId,
+    );
+    final storedReceipt = ConfirmedReceiptReview(
+      merchant: expense.receipt.merchant,
+      date: expense.receipt.date,
+      currencyCode: expense.receipt.currencyCode,
+      total: expense.receipt.total,
+      receiptImagePath: storedImagePath,
+      rawOcrText: expense.receipt.rawOcrText,
+    );
 
-      for (final allocation in expense.allocations) {
-        final participant = PersistedParticipant(
-          id: _idGenerator.generate(),
-          name: allocation.participant.name,
-        );
-        storedParticipants[allocation.participant.id] = participant;
-        await _database
-            .into(_database.participants)
-            .insert(
-              ParticipantsCompanion.insert(
-                id: participant.id,
-                name: participant.name,
-              ),
-            );
-      }
+    try {
+      return await _database.transaction(() async {
+        final recordedAt = _clock().toUtc();
+        final storedParticipants = <int, PersistedParticipant>{};
 
-      final paidBy = storedParticipants[expense.paidBy.id]!;
-      await _database
-          .into(_database.expenses)
-          .insert(
-            ExpensesCompanion.insert(
-              id: expenseId,
-              merchant: expense.receipt.merchant,
-              expenseDate: expense.receipt.date,
-              currency: expense.receipt.currencyCode,
-              totalCents: expense.receipt.total.cents,
-              paidByParticipantId: paidBy.id,
-              receiptLocalPath: expense.receipt.receiptImagePath,
-              rawOcrText: expense.receipt.rawOcrText,
-              createdAt: recordedAt,
-              updatedAt: recordedAt,
-            ),
+        for (final allocation in expense.allocations) {
+          final participant = PersistedParticipant(
+            id: _idGenerator.generate(),
+            name: allocation.participant.name,
           );
+          storedParticipants[allocation.participant.id] = participant;
+          await _database
+              .into(_database.participants)
+              .insert(
+                ParticipantsCompanion.insert(
+                  id: participant.id,
+                  name: participant.name,
+                ),
+              );
+        }
 
-      final storedAllocations = <PersistedExpenseAllocation>[];
-      for (final allocation in expense.allocations) {
-        final storedParticipant =
-            storedParticipants[allocation.participant.id]!;
-        final storedAllocation = PersistedExpenseAllocation(
-          id: _idGenerator.generate(),
-          participant: storedParticipant,
-          amount: allocation.amount,
-        );
-        storedAllocations.add(storedAllocation);
+        final paidBy = storedParticipants[expense.paidBy.id]!;
         await _database
-            .into(_database.expenseAllocations)
+            .into(_database.expenses)
             .insert(
-              ExpenseAllocationsCompanion.insert(
-                id: storedAllocation.id,
-                expenseId: expenseId,
-                participantId: storedParticipant.id,
-                amountCents: storedAllocation.amount.cents,
+              ExpensesCompanion.insert(
+                id: expenseId,
+                merchant: expense.receipt.merchant,
+                expenseDate: expense.receipt.date,
+                currency: expense.receipt.currencyCode,
+                totalCents: expense.receipt.total.cents,
+                paidByParticipantId: paidBy.id,
+                receiptLocalPath: storedReceipt.receiptImagePath,
+                rawOcrText: expense.receipt.rawOcrText,
+                createdAt: recordedAt,
+                updatedAt: recordedAt,
               ),
             );
-      }
 
-      return PersistedExpense(
-        id: expenseId,
-        receipt: expense.receipt,
-        paidBy: paidBy,
-        allocations: storedAllocations,
-        createdAt: recordedAt,
-        updatedAt: recordedAt,
-      );
-    });
+        final storedAllocations = <PersistedExpenseAllocation>[];
+        for (final allocation in expense.allocations) {
+          final storedParticipant =
+              storedParticipants[allocation.participant.id]!;
+          final storedAllocation = PersistedExpenseAllocation(
+            id: _idGenerator.generate(),
+            participant: storedParticipant,
+            amount: allocation.amount,
+          );
+          storedAllocations.add(storedAllocation);
+          await _database
+              .into(_database.expenseAllocations)
+              .insert(
+                ExpenseAllocationsCompanion.insert(
+                  id: storedAllocation.id,
+                  expenseId: expenseId,
+                  participantId: storedParticipant.id,
+                  amountCents: storedAllocation.amount.cents,
+                ),
+              );
+        }
+
+        return PersistedExpense(
+          id: expenseId,
+          receipt: storedReceipt,
+          paidBy: paidBy,
+          allocations: storedAllocations,
+          createdAt: recordedAt,
+          updatedAt: recordedAt,
+        );
+      });
+    } on Object {
+      try {
+        await _receiptImageStorage.delete(storedImagePath);
+      } on Object {
+        // Preserve the database failure that prevented the expense save.
+      }
+      rethrow;
+    }
   }
 
   @override
