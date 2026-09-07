@@ -263,6 +263,9 @@ class _AllocationList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final usesCompactRows =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(16) > 22;
     return Card(
       margin: EdgeInsets.zero,
       child: Column(
@@ -276,14 +279,28 @@ class _AllocationList extends StatelessWidget {
                   key: ValueKey('expense-allocation-${allocation.id}'),
                   leading: CircleAvatar(child: Text('${index + 1}')),
                   title: Text(allocation.participant.name),
-                  subtitle: isPayer
-                      ? const Text('Paid for this expense')
+                  subtitle: isPayer || usesCompactRows
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (isPayer) const Text('Paid for this expense'),
+                            if (usesCompactRows)
+                              Text(
+                                allocation.amount.format(),
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                          ],
+                        )
                       : null,
-                  trailing: Text(
-                    allocation.amount.format(),
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
+                  trailing: usesCompactRows
+                      ? null
+                      : Text(
+                          allocation.amount.format(),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
                 );
               },
             ),

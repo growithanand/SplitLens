@@ -91,6 +91,33 @@ void main() {
     expect(find.text('Expense not found'), findsOneWidget);
   });
 
+  testWidgets('adapts allocations for a narrow large-text screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final expense = persistedExpenseFixture(
+      id: 'saved-expense',
+      merchant: 'SplitLens Synthetic Neighborhood Market',
+      totalCents: 599,
+      participantNames: const ['Anand', 'Malavika', 'Parth'],
+    );
+
+    await _pumpDetail(
+      tester,
+      FakeExpenseRepository(initialExpenses: [expense]),
+      expenseId: expense.id,
+      textScaler: const TextScaler.linear(2),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('€2.00'), findsNWidgets(2));
+    expect(find.text('€1.99'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('shows an error and retries the expense read', (tester) async {
     var loadCount = 0;
     final expense = persistedExpenseFixture();
@@ -121,11 +148,18 @@ Future<void> _pumpDetail(
   WidgetTester tester,
   FakeExpenseRepository repository, {
   String expenseId = 'expense-1',
+  TextScaler textScaler = TextScaler.noScaling,
 }) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: [expenseRepositoryProvider.overrideWithValue(repository)],
-      child: MaterialApp(home: ExpenseDetailScreen(expenseId: expenseId)),
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
+        home: ExpenseDetailScreen(expenseId: expenseId),
+      ),
     ),
   );
 }

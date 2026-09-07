@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -82,6 +83,48 @@ void main() {
     expect(find.text('Paid by Anand'), findsOneWidget);
   });
 
+  testWidgets('adapts expense cards for narrow large-text screens', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final semantics = tester.ensureSemantics();
+    final expense = persistedExpenseFixture(
+      id: 'saved-expense',
+      merchant: 'SplitLens Synthetic Neighborhood Market',
+      totalCents: 599,
+      participantNames: const ['Anand', 'Malavika', 'Parth'],
+    );
+
+    await _pumpHistory(
+      tester,
+      FakeExpenseRepository(initialExpenses: [expense]),
+      textScaler: const TextScaler.linear(2),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('€5.99'), findsOneWidget);
+    expect(find.text('3 participants'), findsOneWidget);
+    final historyCard = find.bySemanticsLabel(
+      RegExp(
+        r'SplitLens Synthetic Neighborhood Market, .*€5\.99, '
+        r'3 participants\. Open expense details\.',
+      ),
+    );
+    expect(historyCard, findsOneWidget);
+    expect(
+      tester
+          .getSemantics(historyCard)
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
   testWidgets('shows an error and retries the repository read', (tester) async {
     var loadCount = 0;
     final expense = persistedExpenseFixture();
@@ -112,12 +155,19 @@ void main() {
 
 Future<void> _pumpHistory(
   WidgetTester tester,
-  FakeExpenseRepository repository,
-) {
+  FakeExpenseRepository repository, {
+  TextScaler textScaler = TextScaler.noScaling,
+}) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: [expenseRepositoryProvider.overrideWithValue(repository)],
-      child: const MaterialApp(home: ExpenseHistoryScreen()),
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
+        home: const ExpenseHistoryScreen(),
+      ),
     ),
   );
 }

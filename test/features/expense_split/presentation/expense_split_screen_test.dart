@@ -70,11 +70,41 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('stacks participant entry on a narrow large-text screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpScreen(tester, textScaler: const TextScaler.linear(2));
+
+    final field = find.byKey(const ValueKey('participant-name-field'));
+    final addButton = find.byKey(const ValueKey('add-participant-button'));
+    expect(
+      tester.getTopLeft(addButton).dy,
+      greaterThan(tester.getBottomLeft(field).dy),
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
-Future<void> _pumpScreen(WidgetTester tester) async {
+Future<void> _pumpScreen(
+  WidgetTester tester, {
+  TextScaler textScaler = TextScaler.noScaling,
+}) async {
   await tester.pumpWidget(
-    const ProviderScope(child: MaterialApp(home: ExpenseSplitScreen())),
+    ProviderScope(
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
+        home: const ExpenseSplitScreen(),
+      ),
+    ),
   );
 }
 

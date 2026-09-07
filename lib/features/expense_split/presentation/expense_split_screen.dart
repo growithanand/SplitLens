@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:splitlens/app/widgets/adaptive_field_action.dart';
 import 'package:splitlens/core/money/money_parser.dart';
 import 'package:splitlens/features/expense_split/application/expense_split_controller.dart';
 import 'package:splitlens/features/expense_split/domain/split_participant.dart';
@@ -80,36 +81,31 @@ class _ExpenseSplitScreenState extends ConsumerState<ExpenseSplitScreen> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          key: const ValueKey('participant-name-field'),
-                          controller: _participantController,
-                          textCapitalization: TextCapitalization.words,
-                          textInputAction: TextInputAction.done,
-                          decoration: InputDecoration(
-                            labelText: 'Participant name',
-                            border: const OutlineInputBorder(),
-                            errorText: _participantErrorText(
-                              state.participantNameError,
-                            ),
-                          ),
-                          onChanged: (_) => ref
-                              .read(expenseSplitControllerProvider.notifier)
-                              .clearParticipantNameError(),
-                          onSubmitted: (_) => _addParticipant(),
+                  AdaptiveFieldAction(
+                    key: const ValueKey('manual-split-participant-entry'),
+                    field: TextField(
+                      key: const ValueKey('participant-name-field'),
+                      controller: _participantController,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.done,
+                      decoration: InputDecoration(
+                        labelText: 'Participant name',
+                        border: const OutlineInputBorder(),
+                        errorText: _participantErrorText(
+                          state.participantNameError,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      FilledButton.icon(
-                        key: const ValueKey('add-participant-button'),
-                        onPressed: _addParticipant,
-                        icon: const Icon(Icons.person_add_alt_1),
-                        label: const Text('Add'),
-                      ),
-                    ],
+                      onChanged: (_) => ref
+                          .read(expenseSplitControllerProvider.notifier)
+                          .clearParticipantNameError(),
+                      onSubmitted: (_) => _addParticipant(),
+                    ),
+                    action: FilledButton.icon(
+                      key: const ValueKey('add-participant-button'),
+                      onPressed: _addParticipant,
+                      icon: const Icon(Icons.person_add_alt_1),
+                      label: const Text('Add'),
+                    ),
                   ),
                   const SizedBox(height: 20),
                   if (state.participants.isEmpty)
@@ -185,6 +181,9 @@ class _ParticipantList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final usesCompactRows =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(16) > 22;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -196,11 +195,15 @@ class _ParticipantList extends StatelessWidget {
               title: Text(participants[index].name),
               subtitle: allocationCents == null
                   ? const Text('Enter a valid total to calculate')
-                  : const Text('Equal allocation'),
+                  : Text(
+                      usesCompactRows
+                          ? 'Equal allocation · ${allocationCents![index]}'
+                          : 'Equal allocation',
+                    ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (allocationCents != null)
+                  if (allocationCents != null && !usesCompactRows)
                     Text(
                       allocationCents![index],
                       style: Theme.of(context).textTheme.titleMedium,

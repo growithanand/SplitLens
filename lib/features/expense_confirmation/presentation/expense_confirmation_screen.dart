@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:splitlens/app/navigation/app_routes.dart';
+import 'package:splitlens/app/widgets/adaptive_field_action.dart';
 import 'package:splitlens/features/expense_confirmation/application/expense_confirmation_controller.dart';
 import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
 import 'package:splitlens/features/expense_detail/presentation/expense_detail_screen.dart';
@@ -67,7 +68,10 @@ class _ExpenseConfirmationScreenState
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 12),
-                  _ParticipantEntry(
+                  AdaptiveFieldAction(
+                    key: const ValueKey(
+                      'expense-confirmation-participant-entry',
+                    ),
                     field: TextField(
                       key: const ValueKey(
                         'expense-confirmation-participant-field',
@@ -250,38 +254,6 @@ class _ExpenseConfirmationScreenState
         settings: const RouteSettings(name: AppRoutes.expenseDetail),
         builder: (_) => ExpenseDetailScreen(expenseId: expenseId),
       ),
-    );
-  }
-}
-
-class _ParticipantEntry extends StatelessWidget {
-  const _ParticipantEntry({required this.field, required this.action});
-
-  final Widget field;
-  final Widget action;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      key: const ValueKey('expense-confirmation-participant-entry'),
-      builder: (context, constraints) {
-        final usesLargeText = MediaQuery.textScalerOf(context).scale(16) > 22;
-        if (constraints.maxWidth < 340 || usesLargeText) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [field, const SizedBox(height: 12), action],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: field),
-            const SizedBox(width: 12),
-            action,
-          ],
-        );
-      },
     );
   }
 }
