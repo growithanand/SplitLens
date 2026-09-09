@@ -1,5 +1,7 @@
 # SplitLens
 
+[![Flutter CI](https://github.com/growithanand/SplitLens/actions/workflows/flutter-ci.yml/badge.svg)](https://github.com/growithanand/SplitLens/actions/workflows/flutter-ci.yml)
+
 **Status: In Development (v0.1)**
 
 SplitLens is an Android application that turns printed receipt photos and
