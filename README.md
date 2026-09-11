@@ -176,6 +176,31 @@ flutter devices
 flutter run -d <device-id>
 ```
 
+## Android release signing
+
+Release builds use a private upload key and are never signed with Flutter's
+debug key. Generate the key outside this repository so it cannot be committed:
+
+```powershell
+keytool -genkeypair -v `
+  -keystore "<secure-path-outside-repository>\splitlens-upload-key.p12" `
+  -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+Create the ignored local signing configuration from the committed template:
+
+```powershell
+Copy-Item android/key.properties.example android/key.properties
+```
+
+Replace every placeholder in `android/key.properties`. On Windows, use double
+backslashes in the `storeFile` path. Neither `key.properties` nor keystore
+files should be committed. Then create the Play Store upload bundle:
+
+```powershell
+flutter build appbundle --release
+```
+
 ## Quality checks
 
 Run the same core checks used during development:
