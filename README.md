@@ -47,6 +47,7 @@ currency, and total remain editable and require explicit confirmation.
 | Local expense history | Implemented |
 | Expense details, allocations, receipt image, and raw OCR | Implemented |
 | Loading, empty, validation, and retryable error states | Implemented |
+| Signed Android App Bundle generation | Implemented |
 
 ## Technology
 
