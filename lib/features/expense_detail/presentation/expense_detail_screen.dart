@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
+import 'package:splitlens/features/expense_detail/application/expense_deletion_controller.dart';
 import 'package:splitlens/features/expense_detail/application/expense_detail_provider.dart';
 
 class ExpenseDetailScreen extends ConsumerWidget {
@@ -14,21 +15,131 @@ class ExpenseDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final expense = ref.watch(expenseDetailProvider(expenseId));
+    final deletion = ref.watch(expenseDeletionControllerProvider(expenseId));
+    final loadedExpense = expense.asData?.value;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Expense details')),
-      body: SafeArea(
-        child: expense.when(
-          loading: () => const _DetailLoading(),
-          error: (error, stackTrace) => _DetailUnavailable(
-            onRetry: () => ref.invalidate(expenseDetailProvider(expenseId)),
+    return PopScope(
+      canPop: !deletion.isDeleting,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Expense details'),
+          actions: [
+            if (loadedExpense != null)
+              if (deletion.isDeleting)
+                const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else
+                IconButton(
+                  key: const ValueKey('delete-expense-button'),
+                  onPressed: () =>
+                      _requestDeletion(context, ref, expense: loadedExpense),
+                  tooltip: 'Delete expense',
+                  icon: const Icon(Icons.delete_outline),
+                ),
+          ],
+        ),
+        body: SafeArea(
+          child: expense.when(
+            loading: () => const _DetailLoading(),
+            error: (error, stackTrace) => _DetailUnavailable(
+              onRetry: () => ref.invalidate(expenseDetailProvider(expenseId)),
+            ),
+            data: (expense) => expense == null
+                ? const _ExpenseNotFound()
+                : _ExpenseDetails(expense: expense),
           ),
-          data: (expense) => expense == null
-              ? const _ExpenseNotFound()
-              : _ExpenseDetails(expense: expense),
         ),
       ),
     );
+  }
+
+  Future<void> _requestDeletion(
+    BuildContext context,
+    WidgetRef ref, {
+    required PersistedExpense expense,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete expense?'),
+        content: Text(
+          'Delete ${expense.receipt.merchant}, its participant allocations, '
+          'and its saved receipt image? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('cancel-delete-expense-button'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-delete-expense-button'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    final status = await ref
+        .read(expenseDeletionControllerProvider(expenseId).notifier)
+        .delete();
+    if (!context.mounted || status == null) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    switch (status) {
+      case ExpenseDeletionStatus.failure:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              ref
+                      .read(expenseDeletionControllerProvider(expenseId))
+                      .errorMessage ??
+                  'Expense could not be deleted. Try again.',
+            ),
+          ),
+        );
+        return;
+      case ExpenseDeletionStatus.deleted:
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Expense deleted.')),
+        );
+        Navigator.pop(context, true);
+        return;
+      case ExpenseDeletionStatus.notFound:
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Expense was already deleted.')),
+        );
+        Navigator.pop(context, true);
+        return;
+      case ExpenseDeletionStatus.deletedWithReceiptCleanupFailure:
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Expense deleted, but its receipt image could not be removed.',
+            ),
+          ),
+        );
+        Navigator.pop(context, true);
+        return;
+      case ExpenseDeletionStatus.idle:
+      case ExpenseDeletionStatus.deleting:
+        return;
+    }
   }
 }
 

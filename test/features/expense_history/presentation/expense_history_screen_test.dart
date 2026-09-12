@@ -83,6 +83,35 @@ void main() {
     expect(find.text('Paid by Anand'), findsOneWidget);
   });
 
+  testWidgets('refreshes history after a confirmed expense deletion', (
+    tester,
+  ) async {
+    final expense = persistedExpenseFixture(
+      id: 'saved-expense',
+      merchant: 'SplitLens Synthetic Market',
+    );
+    final repository = FakeExpenseRepository(initialExpenses: [expense]);
+    await _pumpHistory(tester, repository);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-expense-saved-expense')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('delete-expense-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete expense?'), findsOneWidget);
+    expect(repository.deleteRequests, isEmpty);
+
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-delete-expense-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteRequests, [expense.id]);
+    expect(find.byKey(const ValueKey('expense-history-empty')), findsOneWidget);
+    expect(find.text('Expense deleted.'), findsOneWidget);
+  });
+
   testWidgets('adapts expense cards for narrow large-text screens', (
     tester,
   ) async {

@@ -50,7 +50,20 @@ final class LocalReceiptImageStorage implements ReceiptImageStorage {
 
   @override
   Future<void> delete(String storedPath) async {
-    final stored = File(storedPath);
+    final root = await _rootDirectory();
+    final receiptsPath = path.normalize(
+      path.absolute(path.join(root.path, 'receipts')),
+    );
+    final normalizedStoredPath = path.normalize(path.absolute(storedPath));
+    if (!path.isWithin(receiptsPath, normalizedStoredPath)) {
+      throw ArgumentError.value(
+        storedPath,
+        'storedPath',
+        'Must point to a managed receipt image.',
+      );
+    }
+
+    final stored = File(normalizedStoredPath);
     if (await stored.exists()) {
       await stored.delete();
     }

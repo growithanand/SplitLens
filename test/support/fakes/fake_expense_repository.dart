@@ -7,13 +7,16 @@ final class FakeExpenseRepository implements ExpenseRepository {
     this.onSave,
     this.onGetById,
     this.onGetAll,
+    this.onDeleteById,
     Iterable<PersistedExpense> initialExpenses = const [],
   }) : _storedExpenses = List.of(initialExpenses);
 
   final Future<PersistedExpense> Function(ConfirmedExpense expense)? onSave;
   final Future<PersistedExpense?> Function(String expenseId)? onGetById;
   final Future<List<PersistedExpense>> Function()? onGetAll;
+  final Future<ExpenseDeletionResult> Function(String expenseId)? onDeleteById;
   final List<ConfirmedExpense> saveRequests = [];
+  final List<String> deleteRequests = [];
   final List<PersistedExpense> _storedExpenses;
 
   @override
@@ -48,6 +51,21 @@ final class FakeExpenseRepository implements ExpenseRepository {
       return List.unmodifiable(await callback());
     }
     return List.unmodifiable(_storedExpenses);
+  }
+
+  @override
+  Future<ExpenseDeletionResult> deleteById(String expenseId) async {
+    deleteRequests.add(expenseId);
+    final callback = onDeleteById;
+    final result = callback == null
+        ? _storedExpenses.any((expense) => expense.id == expenseId)
+              ? ExpenseDeletionResult.deleted
+              : ExpenseDeletionResult.notFound
+        : await callback(expenseId);
+    if (result != ExpenseDeletionResult.notFound) {
+      _storedExpenses.removeWhere((expense) => expense.id == expenseId);
+    }
+    return result;
   }
 }
 

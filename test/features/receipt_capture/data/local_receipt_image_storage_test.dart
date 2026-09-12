@@ -65,4 +65,13 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('refuses to delete files outside managed receipt storage', () async {
+    final outside = File(path.join(root.path, 'outside-receipt.png'));
+    await outside.writeAsBytes([5, 9, 9]);
+
+    await expectLater(storage.delete(outside.path), throwsArgumentError);
+
+    expect(await outside.exists(), isTrue);
+  });
 }

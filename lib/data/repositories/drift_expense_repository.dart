@@ -152,6 +152,51 @@ final class DriftExpenseRepository implements ExpenseRepository {
     return Future.wait(expenses.map(_loadExpense));
   }
 
+  @override
+  Future<ExpenseDeletionResult> deleteById(String expenseId) async {
+    final receiptImagePath = await _database.transaction<String?>(() async {
+      final expense = await (_database.select(
+        _database.expenses,
+      )..where((row) => row.id.equals(expenseId))).getSingleOrNull();
+      if (expense == null) {
+        return null;
+      }
+
+      final allocations = await (_database.select(
+        _database.expenseAllocations,
+      )..where((row) => row.expenseId.equals(expenseId))).get();
+      final participantIds = allocations
+          .map((allocation) => allocation.participantId)
+          .toList(growable: false);
+
+      final deletedExpenseCount = await (_database.delete(
+        _database.expenses,
+      )..where((row) => row.id.equals(expenseId))).go();
+      if (deletedExpenseCount != 1) {
+        throw StateError('The stored expense could not be deleted.');
+      }
+
+      for (final participantId in participantIds) {
+        await (_database.delete(
+          _database.participants,
+        )..where((row) => row.id.equals(participantId))).go();
+      }
+
+      return expense.receiptLocalPath;
+    });
+
+    if (receiptImagePath == null) {
+      return ExpenseDeletionResult.notFound;
+    }
+
+    try {
+      await _receiptImageStorage.delete(receiptImagePath);
+      return ExpenseDeletionResult.deleted;
+    } on Object {
+      return ExpenseDeletionResult.deletedWithReceiptCleanupFailure;
+    }
+  }
+
   Future<PersistedExpense> _loadExpense(Expense expense) async {
     final rows = await (_database.select(_database.expenseAllocations).join([
       innerJoin(

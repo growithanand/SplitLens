@@ -91,6 +91,58 @@ void main() {
     expect(find.text('Expense not found'), findsOneWidget);
   });
 
+  testWidgets('requires confirmation before deleting an expense', (
+    tester,
+  ) async {
+    final expense = persistedExpenseFixture(
+      id: 'saved-expense',
+      merchant: 'SplitLens Synthetic Market',
+    );
+    final repository = FakeExpenseRepository(initialExpenses: [expense]);
+    await _pumpDetail(tester, repository, expenseId: expense.id);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('delete-expense-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete expense?'), findsOneWidget);
+    expect(find.textContaining('its participant allocations'), findsOneWidget);
+    expect(repository.deleteRequests, isEmpty);
+
+    await tester.tap(
+      find.byKey(const ValueKey('cancel-delete-expense-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete expense?'), findsNothing);
+    expect(repository.deleteRequests, isEmpty);
+    expect(find.text('SplitLens Synthetic Market'), findsOneWidget);
+  });
+
+  testWidgets('keeps details available when deletion fails', (tester) async {
+    final expense = persistedExpenseFixture(id: 'saved-expense');
+    final repository = FakeExpenseRepository(
+      initialExpenses: [expense],
+      onDeleteById: (_) async => throw StateError('synthetic delete failure'),
+    );
+    await _pumpDetail(tester, repository, expenseId: expense.id);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('delete-expense-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-delete-expense-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Synthetic Market'), findsOneWidget);
+    expect(
+      find.text('Expense could not be deleted. Try again.'),
+      findsOneWidget,
+    );
+    expect(repository.deleteRequests, [expense.id]);
+  });
+
   testWidgets('adapts allocations for a narrow large-text screen', (
     tester,
   ) async {

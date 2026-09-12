@@ -7,6 +7,7 @@ import 'package:splitlens/core/utils/local_id_generator.dart';
 import 'package:splitlens/data/database/app_database.dart';
 import 'package:splitlens/data/repositories/drift_expense_repository.dart';
 import 'package:splitlens/features/expense_confirmation/domain/confirmed_expense.dart';
+import 'package:splitlens/features/expense_confirmation/domain/expense_repository.dart';
 import 'package:splitlens/features/expense_split/domain/split_participant.dart';
 import 'package:splitlens/features/receipt_capture/domain/receipt_image_storage.dart';
 import 'package:splitlens/features/receipt_review/domain/confirmed_receipt_review.dart';
@@ -142,6 +143,89 @@ void main() {
     expect(await database.select(database.participants).get(), isEmpty);
     expect(imageStorage.persistRequests, isEmpty);
   });
+
+  test('deletes the complete expense graph and managed receipt', () async {
+    final repository = DriftExpenseRepository.withDependencies(
+      database,
+      _CountingIdGenerator(),
+      imageStorage,
+    );
+    final saved = await repository.save(_expense());
+
+    final result = await repository.deleteById(saved.id);
+
+    expect(result, ExpenseDeletionResult.deleted);
+    expect(await repository.getById(saved.id), isNull);
+    expect(await database.select(database.expenses).get(), isEmpty);
+    expect(await database.select(database.expenseAllocations).get(), isEmpty);
+    expect(await database.select(database.participants).get(), isEmpty);
+    expect(imageStorage.deletedPaths, ['managed-id-0.png']);
+  });
+
+  test('reports a missing expense without deleting a receipt', () async {
+    final repository = DriftExpenseRepository.withDependencies(
+      database,
+      _CountingIdGenerator(),
+      imageStorage,
+    );
+
+    final result = await repository.deleteById('missing-expense');
+
+    expect(result, ExpenseDeletionResult.notFound);
+    expect(imageStorage.deletedPaths, isEmpty);
+  });
+
+  test('keeps the database deletion when receipt cleanup fails', () async {
+    final repository = DriftExpenseRepository.withDependencies(
+      database,
+      _CountingIdGenerator(),
+      imageStorage,
+    );
+    final saved = await repository.save(_expense());
+    imageStorage.deleteFailure = FileSystemException(
+      'Synthetic delete failure',
+    );
+
+    final result = await repository.deleteById(saved.id);
+
+    expect(result, ExpenseDeletionResult.deletedWithReceiptCleanupFailure);
+    expect(await database.select(database.expenses).get(), isEmpty);
+    expect(await database.select(database.expenseAllocations).get(), isEmpty);
+    expect(await database.select(database.participants).get(), isEmpty);
+  });
+
+  test(
+    'rolls back and preserves the receipt when database deletion fails',
+    () async {
+      final repository = DriftExpenseRepository.withDependencies(
+        database,
+        _CountingIdGenerator(),
+        imageStorage,
+      );
+      final saved = await repository.save(_expense());
+      await database.customStatement('''
+        CREATE TRIGGER prevent_expense_delete
+        BEFORE DELETE ON expenses
+        BEGIN
+          SELECT RAISE(ABORT, 'synthetic delete failure');
+        END;
+      ''');
+
+      await expectLater(
+        repository.deleteById(saved.id),
+        throwsA(isA<Exception>()),
+      );
+
+      expect(await repository.getById(saved.id), isNotNull);
+      expect(await database.select(database.expenses).get(), hasLength(1));
+      expect(
+        await database.select(database.expenseAllocations).get(),
+        hasLength(2),
+      );
+      expect(await database.select(database.participants).get(), hasLength(2));
+      expect(imageStorage.deletedPaths, isEmpty);
+    },
+  );
 }
 
 ConfirmedExpense _expense({
@@ -193,6 +277,7 @@ final class _FakeReceiptImageStorage implements ReceiptImageStorage {
   final List<({String sourcePath, String imageId})> persistRequests = [];
   final List<String> deletedPaths = [];
   Object? failure;
+  Object? deleteFailure;
 
   @override
   Future<String> persist({
@@ -210,5 +295,9 @@ final class _FakeReceiptImageStorage implements ReceiptImageStorage {
   @override
   Future<void> delete(String storedPath) async {
     deletedPaths.add(storedPath);
+    final error = deleteFailure;
+    if (error != null) {
+      throw error;
+    }
   }
 }

@@ -38,7 +38,12 @@ class ExpenseHistoryScreen extends ConsumerWidget {
           ),
           data: (expenses) => expenses.isEmpty
               ? const _EmptyHistory()
-              : _ExpenseList(expenses: expenses),
+              : _ExpenseList(
+                  expenses: expenses,
+                  onExpenseChanged: () => ref
+                      .read(expenseHistoryControllerProvider.notifier)
+                      .reload(),
+                ),
         ),
       ),
     );
@@ -161,9 +166,10 @@ class _HistoryError extends StatelessWidget {
 }
 
 class _ExpenseList extends StatelessWidget {
-  const _ExpenseList({required this.expenses});
+  const _ExpenseList({required this.expenses, required this.onExpenseChanged});
 
   final List<PersistedExpense> expenses;
+  final Future<void> Function() onExpenseChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -174,12 +180,18 @@ class _ExpenseList extends StatelessWidget {
       separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) => _ExpenseHistoryCard(
         expense: expenses[index],
-        onOpen: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            settings: const RouteSettings(name: AppRoutes.expenseDetail),
-            builder: (_) => ExpenseDetailScreen(expenseId: expenses[index].id),
-          ),
-        ),
+        onOpen: () async {
+          final changed = await Navigator.of(context).push<bool>(
+            MaterialPageRoute<bool>(
+              settings: const RouteSettings(name: AppRoutes.expenseDetail),
+              builder: (_) =>
+                  ExpenseDetailScreen(expenseId: expenses[index].id),
+            ),
+          );
+          if (changed == true && context.mounted) {
+            await onExpenseChanged();
+          }
+        },
       ),
     );
   }
