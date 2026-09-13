@@ -46,6 +46,7 @@ currency, and total remain editable and require explicit confirmation.
 | Private app-owned receipt image storage | Implemented |
 | Local expense history | Implemented |
 | Expense details, allocations, receipt image, and raw OCR | Implemented |
+| Confirmed expense deletion with local receipt cleanup | Implemented |
 | Loading, empty, validation, and retryable error states | Implemented |
 | Signed Android App Bundle generation | Implemented |
 
@@ -239,7 +240,7 @@ Only synthetic or fully anonymized receipts will be used.
 - Only EUR expenses are supported.
 - OCR and parser quality depends on image clarity and receipt layout.
 - Handwritten and non-Latin receipts are outside the current scope.
-- Saved expenses are currently read-only; editing and deletion are not
+- Saved expenses can be deleted, but editing them after saving is not
   implemented.
 - There is no authentication, backend, cloud backup, shared group, or
   synchronization.
