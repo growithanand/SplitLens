@@ -5,12 +5,28 @@ import 'package:splitlens/app/navigation/app_routes.dart';
 import 'package:splitlens/features/expense_confirmation/domain/persisted_expense.dart';
 import 'package:splitlens/features/expense_detail/presentation/expense_detail_screen.dart';
 import 'package:splitlens/features/expense_history/application/expense_history_controller.dart';
+import 'package:splitlens/features/expense_history/application/expense_history_filter.dart';
 
-class ExpenseHistoryScreen extends ConsumerWidget {
+class ExpenseHistoryScreen extends ConsumerStatefulWidget {
   const ExpenseHistoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ExpenseHistoryScreen> createState() =>
+      _ExpenseHistoryScreenState();
+}
+
+class _ExpenseHistoryScreenState extends ConsumerState<ExpenseHistoryScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final history = ref.watch(expenseHistoryControllerProvider);
 
     return Scaffold(
@@ -38,8 +54,15 @@ class ExpenseHistoryScreen extends ConsumerWidget {
           ),
           data: (expenses) => expenses.isEmpty
               ? const _EmptyHistory()
-              : _ExpenseList(
-                  expenses: expenses,
+              : _HistoryContent(
+                  filteredExpenses: ExpenseHistoryFilter.apply(
+                    expenses,
+                    _query,
+                  ),
+                  searchController: _searchController,
+                  query: _query,
+                  onQueryChanged: (query) => setState(() => _query = query),
+                  onClearSearch: _clearSearch,
                   onExpenseChanged: () => ref
                       .read(expenseHistoryControllerProvider.notifier)
                       .reload(),
@@ -47,6 +70,11 @@ class ExpenseHistoryScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _query = '');
   }
 }
 
@@ -156,6 +184,114 @@ class _HistoryError extends StatelessWidget {
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Try again'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryContent extends StatelessWidget {
+  const _HistoryContent({
+    required this.filteredExpenses,
+    required this.searchController,
+    required this.query,
+    required this.onQueryChanged,
+    required this.onClearSearch,
+    required this.onExpenseChanged,
+  });
+
+  final List<PersistedExpense> filteredExpenses;
+  final TextEditingController searchController;
+  final String query;
+  final ValueChanged<String> onQueryChanged;
+  final VoidCallback onClearSearch;
+  final Future<void> Function() onExpenseChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: TextField(
+            key: const ValueKey('expense-history-search-field'),
+            controller: searchController,
+            onChanged: onQueryChanged,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              labelText: 'Search expenses',
+              hintText: 'Merchant or participant',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: query.trim().isEmpty
+                  ? null
+                  : IconButton(
+                      key: const ValueKey('clear-expense-history-search'),
+                      onPressed: onClearSearch,
+                      tooltip: 'Clear expense search',
+                      icon: const Icon(Icons.clear),
+                    ),
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ),
+        Expanded(
+          child: filteredExpenses.isEmpty
+              ? _NoMatchingExpenses(query: query, onClearSearch: onClearSearch)
+              : _ExpenseList(
+                  expenses: filteredExpenses,
+                  onExpenseChanged: onExpenseChanged,
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NoMatchingExpenses extends StatelessWidget {
+  const _NoMatchingExpenses({required this.query, required this.onClearSearch});
+
+  final String query;
+  final VoidCallback onClearSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      key: const ValueKey('expense-history-no-matches'),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.search_off_outlined,
+                size: 56,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'No matching expenses',
+                style: Theme.of(context).textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No merchant or participant matches “${query.trim()}”.',
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: colorScheme.onSurfaceVariant),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                key: const ValueKey('clear-no-matches-search-button'),
+                onPressed: onClearSearch,
+                icon: const Icon(Icons.clear),
+                label: const Text('Clear search'),
               ),
             ],
           ),

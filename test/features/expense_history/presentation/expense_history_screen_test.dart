@@ -62,6 +62,57 @@ void main() {
     expect(find.text('04 Sep 2026'), findsOneWidget);
     expect(find.text('€5.99'), findsOneWidget);
     expect(find.text('3 participants'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('expense-history-search-field')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('filters by merchant or participant and clears the query', (
+    tester,
+  ) async {
+    final marketExpense = persistedExpenseFixture(
+      id: 'market-expense',
+      merchant: 'Berlin Synthetic Market',
+      participantNames: const ['Anand', 'Mira'],
+    );
+    final cafeExpense = persistedExpenseFixture(
+      id: 'cafe-expense',
+      merchant: 'Corner Cafe',
+      participantNames: const ['Parth', 'Malavika'],
+    );
+    await _pumpHistory(
+      tester,
+      FakeExpenseRepository(initialExpenses: [marketExpense, cafeExpense]),
+    );
+    await tester.pumpAndSettle();
+
+    final searchField = find.byKey(
+      const ValueKey('expense-history-search-field'),
+    );
+    await tester.enterText(searchField, 'PARTH');
+    await tester.pump();
+
+    expect(find.text('Corner Cafe'), findsOneWidget);
+    expect(find.text('Berlin Synthetic Market'), findsNothing);
+
+    await tester.enterText(searchField, 'missing merchant');
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('expense-history-no-matches')),
+      findsOneWidget,
+    );
+    expect(find.text('No matching expenses'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('clear-no-matches-search-button')),
+    );
+    await tester.pump();
+
+    expect(find.text('Berlin Synthetic Market'), findsOneWidget);
+    expect(find.text('Corner Cafe'), findsOneWidget);
+    expect(tester.widget<TextField>(searchField).controller!.text, isEmpty);
   });
 
   testWidgets('opens the selected saved expense', (tester) async {

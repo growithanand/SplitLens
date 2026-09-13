@@ -44,7 +44,7 @@ currency, and total remain editable and require explicit confirmation.
 | Integer-cent equal splitting with deterministic remainders | Implemented |
 | Transactional local persistence with Drift and SQLite | Implemented |
 | Private app-owned receipt image storage | Implemented |
-| Local expense history | Implemented |
+| Local expense history with merchant and participant search | Implemented |
 | Expense details, allocations, receipt image, and raw OCR | Implemented |
 | Confirmed expense deletion with local receipt cleanup | Implemented |
 | Loading, empty, validation, and retryable error states | Implemented |
