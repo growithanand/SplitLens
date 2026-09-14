@@ -166,10 +166,13 @@ Generate Drift code after changing database tables:
 
 ```powershell
 dart run build_runner build
+dart run drift_dev make-migrations
 ```
 
 The generated `lib/data/database/app_database.g.dart` file is committed so a
 fresh checkout can be analyzed and built before code generation is needed.
+Versioned snapshots under `drift_schemas/` let CI detect schema changes that
+were made without a matching version bump or committed migration output.
 
 Check available Android targets and run the app:
 
@@ -209,6 +212,7 @@ Run the same core checks used during development:
 
 ```powershell
 dart format --output=none --set-exit-if-changed .
+dart run drift_dev make-migrations
 flutter analyze
 flutter test
 flutter build apk --debug

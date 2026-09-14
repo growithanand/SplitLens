@@ -1,4 +1,5 @@
 import 'package:drift/native.dart';
+import 'package:drift_dev/api/migrations_native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:splitlens/data/database/app_database.dart';
 
@@ -25,6 +26,12 @@ void main() {
       'expenses',
       'expense_allocations',
     });
+  });
+
+  test('runtime schema strictly matches the current Drift model', () async {
+    await database.validateDatabaseSchema(
+      options: const ValidationOptions(validateDropped: true),
+    );
   });
 
   test('round-trips an expense with participants and allocations', () async {
