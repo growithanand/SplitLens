@@ -33,6 +33,33 @@ Receipt photograph or screenshot
 OCR output is never treated as trusted financial data. Merchant, date,
 currency, and total remain editable and require explicit confirmation.
 
+## App walkthrough
+
+<table>
+  <tr>
+    <th>1. Start a receipt</th>
+    <th>2. Select the image</th>
+    <th>3. Inspect OCR</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/01-home.png" width="240" alt="SplitLens home screen"></td>
+    <td><img src="docs/screenshots/02-receipt-selection.png" width="240" alt="Synthetic receipt selected for recognition"></td>
+    <td><img src="docs/screenshots/03-receipt-recognition.png" width="240" alt="Raw on-device OCR result"></td>
+  </tr>
+  <tr>
+    <th>4. Review every field</th>
+    <th>5. Verify the split</th>
+    <th>6. Save locally</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/04-receipt-review.png" width="240" alt="Editable reviewed receipt details"></td>
+    <td><img src="docs/screenshots/05-expense-allocation.png" width="240" alt="Exact participant allocations and payer selection"></td>
+    <td><img src="docs/screenshots/06-expense-saved.png" width="240" alt="Expense saved successfully on the device"></td>
+  </tr>
+</table>
+
+The walkthrough uses a fully synthetic receipt and sample participants.
+
 ## v0.1.0 release scope
 
 | Capability | Current status |
