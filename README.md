@@ -2,7 +2,7 @@
 
 [![Flutter CI](https://github.com/growithanand/SplitLens/actions/workflows/flutter-ci.yml/badge.svg)](https://github.com/growithanand/SplitLens/actions/workflows/flutter-ci.yml)
 
-**Status: In Development (v0.1)**
+**Status: v0.1.0 Android MVP checkpoint**
 
 SplitLens is an Android application that turns printed receipt photos and
 screenshots into editable, locally stored group expenses.
@@ -10,6 +10,11 @@ screenshots into editable, locally stored group expenses.
 Manually entering receipt information when splitting shared expenses is slow
 and error-prone. SplitLens uses on-device OCR to propose receipt details while
 keeping the user in control of every value before anything is saved.
+
+Version 0.1.0 is a completed local-first MVP checkpoint. It covers the full
+workflow from receipt capture through verified splitting, local persistence,
+history, inspection, and deletion. Its intentionally limited release scope is
+described below.
 
 ## Current workflow
 
@@ -28,7 +33,7 @@ Receipt photograph or screenshot
 OCR output is never treated as trusted financial data. Merchant, date,
 currency, and total remain editable and require explicit confirmation.
 
-## Implemented features
+## v0.1.0 release scope
 
 | Capability | Current status |
 | --- | --- |
@@ -62,12 +67,16 @@ currency, and total remain editable and require explicit confirmation.
 - UUIDs for local record identifiers
 - Flutter unit, database, and widget tests
 
-No backend, account, cloud storage, or network synchronization is part of v0.1.
+No backend, account, cloud storage, or network synchronization is part of
+v0.1.0.
 
 ## Architecture
 
 SplitLens uses a feature-oriented structure with UI, application state, domain
 logic, and device integrations kept distinguishable.
+
+See [Architecture](docs/ARCHITECTURE.md) for the complete data flow,
+responsibility boundaries, persistence model, and financial invariants.
 
 ```mermaid
 flowchart LR
@@ -120,7 +129,7 @@ the local model evolves.
 
 ## Supported receipts
 
-The v0.1 parser is designed for:
+The v0.1.0 parser is designed for:
 
 - Printed English and German receipts
 - Latin-script text
@@ -222,7 +231,7 @@ The automated suite covers money parsing, exact splitting, English and German
 receipt parsing, state transitions, database constraints and transactions,
 repository behavior, and selected screen flows.
 
-## Demonstration flow
+## Verification flow
 
 1. Start SplitLens on an Android device or emulator.
 2. Select a clearly synthetic or anonymized receipt image.
@@ -235,12 +244,11 @@ repository behavior, and selected screen flows.
 9. Open expense history and select the saved expense.
 10. Inspect participant allocations and receipt evidence.
 
-Public screenshots and a short demo video are planned before the v0.1 release.
-Only synthetic or fully anonymized receipts will be used.
+Only synthetic or fully anonymized receipts should be used in public examples.
 
-## Known limitations
+## v0.1.0 scope boundaries
 
-- Android is the only supported platform in v0.1.
+- Android is the only supported platform in v0.1.0.
 - Only EUR expenses are supported.
 - OCR and parser quality depends on image clarity and receipt layout.
 - Handwritten and non-Latin receipts are outside the current scope.
@@ -248,3 +256,7 @@ Only synthetic or fully anonymized receipts will be used.
   implemented.
 - There is no authentication, backend, cloud backup, shared group, or
   synchronization.
+
+## Release history
+
+See [CHANGELOG.md](CHANGELOG.md) for the v0.1.0 checkpoint contents.
